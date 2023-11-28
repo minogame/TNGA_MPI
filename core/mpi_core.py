@@ -1,0 +1,6 @@
+class TAGS:
+    DATA_ADJ_MATRIX = 0
+    DATA_CAL_LOSS = 1
+    DATA_MISC = 2
+    INFO_TIME_ESTIMATION = 10
+    INFO_ = 11

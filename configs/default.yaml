@@ -1,0 +1,24 @@
+experiment:
+    data: a.npz
+    evoluation_goal: a.npy
+
+tensor_network:
+    initializer: tf.random_normal_initializer
+    initializer_params:
+        mean: 0.0
+        stddev: 1.0
+
+optimization:
+    evaluate_repeat: 5
+    max_iterations: 50000
+    optimizer: tf.train.AdamOptimizer
+    optimizer_params:
+        learning_rate: 0.001
+
+agent_behavier:
+    timeout: 1800
+    allow_fewer_repeat_after_timeout: True
+
+generation_property:
+    n_individuals_span: 200
+    n_individuals_survive: 100
