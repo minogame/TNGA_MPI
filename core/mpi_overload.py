@@ -18,13 +18,14 @@ class MPI_Overlord():
         self.known_agents = {}
         self.time = 0
 
-    def __call_with_interval__(self, func, interval):
-        return func if self.time%interval == 0 else self.dummy_func
-
-    def __tik__(self, sec):
-        # logging.info(self.time)
+    def tik(self, sec):
         self.time += sec
         time.sleep(sec)
+
+    def call_with_interval(self, func, interval, **kwds):
+        if self.time % interval == 0:
+            func(**kwds)
+        return
 
     def __check_available_agent__(self):
         self.available_agents.clear()

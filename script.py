@@ -2,6 +2,7 @@ import random
 from typing import Any
 from mpi4py import MPI
 import time
+import numpy as np
 
 class MPI_PROCESS:
 
@@ -13,6 +14,10 @@ class MPI_PROCESS:
             self.queue = list(range(100))
 
     def run_as_overlord(self) -> None:
+        # data = {'key1' : [7, 2.72, 2+3j], 'key2' : ('abc', 'xyz')}
+        data = np.load('data.npy')
+        data = self.comm.bcast(data, root=0)
+        return
         collected_queue = []
         self.agent_state = dict()
         self.others = list(range(1, self.size))
@@ -62,6 +67,11 @@ class MPI_PROCESS:
         return
 
     def run_as_agent(self) -> None:
+        data = None
+        data = self.comm.bcast(data, root=0)
+
+        print(self.rank, 'receive data', data)
+        return
         req = self.comm.irecv()
         while True:
             status, msg = req.test()

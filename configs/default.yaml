@@ -1,5 +1,4 @@
 experiment:
-    data: a.npz
     evoluation_goal: a.npy
 
 tensor_network:

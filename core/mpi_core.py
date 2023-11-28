@@ -1,6 +1,8 @@
 class TAGS:
     DATA_ADJ_MATRIX = 0
-    DATA_CAL_LOSS = 1
-    DATA_MISC = 2
+    DATA_GOAL = 1
+    DATA_RUN_REPORT = 2
+    DATA_MISC = 3
     INFO_TIME_ESTIMATION = 10
-    INFO_ = 11
+    INFO_SURVIVAL = 11
+    INFO_MISC = 12

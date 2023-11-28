@@ -1,31 +1,35 @@
+from typing import Any
+import numpy as np
+import yaml
+import argparse
 from mpi4py import MPI
 from core.components import Overlord
+from core.mpi_agent import MPI_Agent
+from core.mpi_overload import MPI_Overlord
 
-class MPI_PROCESS:
+class MPI_Process:
 
-    def __init__(self) -> None:
+    def __init__(self, **kwds) -> None:
+        self.config = kwds
         self.comm = MPI.COMM_WORLD
         self.rank = self.comm.Get_rank()
 
-    def run_as_overlord(self) -> None:
-        
-        pass
+        if self.rank == 0:
+            goal = kwds['experiment']['evoluation_goal']
+            self.evoluation_goal = np.load(goal)
+            self.evoluation_goal = self.comm.bcast(self.evoluation_goal, root=0)
+            self.noumenon = MPI_Overlord(self.comm, **kwds)
+        else:
+            self.noumenon = MPI_Agent(self.comm, **kwds)
 
-    def run_as_agent(self) -> None:
-        
-        pass
-
+    def __call__(self,) -> Any:
+        self.noumenon()
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', type=str, help='The yaml config file.', default='configs/default.yaml')
+    args = parser.parse_args()
 
-
-if rank == 0:
-    print(comm, rank)
-    print(comm.Get_size())
-    print(comm.Get_info())
-    print(comm.Get_topology())
-    data = {'a': 7, 'b': 3.14}
-    comm.send(data, dest=1, tag=11)
-elif rank == 1:
-    data = comm.recv(source=0, tag=11)
-    print(data)
+    config = yaml.load(open(args.config), yaml.Loader)
+    process = MPI_Process(config)
+    process()
