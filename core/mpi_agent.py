@@ -10,7 +10,8 @@ from mpi_core import TAGS
 
 
 class MPI_Agent(object):
-    def __init__(self, comm, **kwargs):
+
+    def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
         self.kwargs = kwargs
         self.comm = comm
         self.time = 0
@@ -28,85 +29,95 @@ class MPI_Agent(object):
         status, msg = self.req_surv.test()
         if status:
             real_up_time = time.time() - self.start_time
-            self.comm.isend((self.rank, self.time, real_up_time), dest=0, tag=TAGS.INFO_SURVIVAL)
+            return_dict = {
+                'rank': self.rank,
+                'time': self.time,
+                'real_up_time': real_up_time,
+            }
+            self.comm.isend(return_dict, dest=0, tag=TAGS.INFO_SURVIVAL)
             print(f'Received survival test singal {msg} from overload, reported tik time {self.time}, real up time {real_up_time}.')
             self.req_surv = self.comm.irecv(tag=1)
 
     def receive_job(self):
-        status, msg = self.req_surv.test()
-
-
-        return None
-        tf_graph, sess, indv_scope, adj_matrix, evaluate_repeat, max_iterations
+        status, msg = self.req_adjm.test()
+        if status:
+            try:
+                indv_scope = msg['indv_scope']
+                adj_matrix = msg['adj_matrix']
+                max_iterations = msg['max_iterations']
+            except:
+                self.req_adjm.Cancel();self.req_adjm.Free()
+                self.req_adjm = self.comm.irecv(source=0, tag=TAGS.DATA_ADJ_MATRIX)
+                self.comm.isend(self.rank, dest=0, tag=TAGS.INFO_ABNORMAL)
+        else:
+            return None
 
         self.g = tf.Graph()
-        self.sess = tf.Session(graph=self.g)
+        self.sess = tf.compat.v1.Session(graph=self.g)
 
-        with g.as_default():
-            with tf.variable_scope(indv_scope):
+        with self.g.as_default():
+            with tf.compat.v1.variable_scope(indv_scope):
                 TN = TensorNetwork(adj_matrix)
                 output = TN.reduction(random=False)
                 goal = tf.convert_to_tensor(self.evoluation_goal)
                 goal_square_norm = tf.convert_to_tensor(np.mean(np.square(self.evoluation_goal)))
                 rse_loss = tf.reduce_mean(tf.square(output - goal)) / goal_square_norm
-                step = TN.opt_opeartions(tf.train.AdamOptimizer(0.001), rse_loss)
+                step = TN.opt_opeartions(tf.compat.v1.train.AdamOptimizer(0.001), rse_loss)
+                var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=indv_scope)
 
-        return step
+        self.sess.run(tf.compat.v1.variables_initializer(var_list))
 
-    def report_result(self):
+        return step, max_iterations, rse_loss
 
+    def report_result(self, rse_loss, current_iter):
 
+        loss = self.sess.run(rse_loss)
         self.sess.close()
-
-        pass
-
-    def evaluate(self):
-        
-        
-        
-        sess.close()
         tf.reset_default_graph()
         del repeat_loss, g
         gc.collect()
 
-        
+        return_dict = {
+            'rank': self.rank,
+            'loss': loss,
+            'current_iter': current_iter,
+        }
+        self.comm.isend(return_dict, dest=0, tag=TAGS.DATA_RUN_REPORT)
+        return
 
-
-            repeat_loss = []
-            for r in range(evaluate_repeat):
-                sess.run(tf.compat.v1.variables_initializer(var_list))
-                for i in range(max_iterations): 
-                    sess.run(step)
-                repeat_loss.append(sess.run(rse_loss))
-
-        return repeat_loss
-
-    def check_and_load(agent_id):
-        file_name = base_folder+'/agent_pool/{}.POOL'.format(agent_id)
-        if os.stat(file_name).st_size == 0:
-            return False, False
-        else:
-            with open(file_name, 'r') as f:
-                goal_name = f.readline()
-                evoluation_goal = np.load(goal_name).astype(np.float32)
-            return True, evoluation_goal
-        
+    def evaluate(self, step, n_iter) -> None:
+        for i in range(n_iter): 
+            self.sess.run(step)
+        return 
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
+        ## when the agent is called
+        ## 1. initilize two mpi recv comm
+        ## 2. sync goal with the rank = 0
+        ## 3. entering the main while True loop
+        ##      i. check if need to report surival state
+        ##      ii. try to receive a job, initilized the tf sess and obtain a step
+        ##      iii. run first N step, estimate overall run time, report to overload
+        ##      iv. if estimate time is largely overhaul, then finish this run and report failure
+        ##      v. run N step, try report surival state and count time
+        ##      vi. if reach timeout or max step, stop run and exit while True loop
+        ##      vii. report current steps and loss, clean tf sess and graph
+        ##      viii. repeat from i. until the overload tell all things done
+        ## 4. clean comm and report finish to rank = 0
+
         self.req_adjm = self.comm.irecv(source=0, tag=TAGS.DATA_ADJ_MATRIX)
         self.req_surv = self.comm.irecv(source=0, tag=TAGS.INFO_SURVIVAL)
         self.sync_goal()
 
         while True:
-            report_surival()
-            step = receive_job()
-            if step:
-
+            self.report_surival()
+            job = self.receive_job()
+            if job:
+                step, max_iterations, rse_loss = job
             else:
                 continue
 
-            
-
+        
             if status:
                 if msg == "Done":
                     break

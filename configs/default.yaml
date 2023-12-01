@@ -2,7 +2,7 @@ experiment:
     evoluation_goal: a.npy
 
 tensor_network:
-    initializer: tf.random_normal_initializer
+    initializer: tf.compat.v1.random_normal_initializer
     initializer_params:
         mean: 0.0
         stddev: 1.0
@@ -10,7 +10,7 @@ tensor_network:
 optimization:
     evaluate_repeat: 5
     max_iterations: 50000
-    optimizer: tf.train.AdamOptimizer
+    optimizer: tf.compat.v1.train.AdamOptimizer
     optimizer_params:
         learning_rate: 0.001
 
