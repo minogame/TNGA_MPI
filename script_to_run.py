@@ -6,21 +6,20 @@ from mpi4py import MPI
 from core.components import Overlord
 from core.mpi_agent import MPI_Agent
 from core.mpi_overload import MPI_Overlord
+import logging
+logging.basicConfig(format='[%(levelname)s] +%(asctime)s+ =%(name)s= %(message)s ', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
 
 class MPI_Process:
 
     def __init__(self, **kwds) -> None:
-        self.config = kwds
-        self.comm = MPI.COMM_WORLD
-        self.rank = self.comm.Get_rank()
+        comm = MPI.COMM_WORLD
+        rank = self.comm.Get_rank()
+        logger = logging.getLogger(f'logger_rank_{self.rank}')
 
         if self.rank == 0:
-            goal = kwds['experiment']['evoluation_goal']
-            self.evoluation_goal = np.load(goal)
-            self.evoluation_goal = self.comm.bcast(self.evoluation_goal, root=0)
-            self.noumenon = MPI_Overlord(self.comm, **kwds)
+            self.noumenon = MPI_Overlord(comm, logger=logger, **kwds)
         else:
-            self.noumenon = MPI_Agent(self.comm, **kwds)
+            self.noumenon = MPI_Agent(comm, logger=logger, **kwds)
 
     def __call__(self,) -> Any:
         self.noumenon()

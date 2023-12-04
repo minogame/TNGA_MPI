@@ -1,5 +1,5 @@
 from typing import Any
-import numpy as np, os, sys, time, logging, gc
+import numpy as np, os, sys, time, gc
 np.set_printoptions(precision=2)
 from tenmul4 import TensorNetwork
 import tensorflow as tf
@@ -8,7 +8,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import mpi4py
 from mpi_core import TAGS
 
-
 class MPI_Agent(object):
 
     def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
@@ -16,16 +15,23 @@ class MPI_Agent(object):
         self.comm = comm
         self.time = 0
         self.start_time = time.time()
+        self.logger = kwargs['logger']
+        self.optimizer = kwargs['optimization']['optimizer']
+        self.optimizer_param = kwargs['optimization']['optimizer_params']
 
     def sync_goal(self):
         try:
             self.evoluation_goal = None
             self.evoluation_goal = self.comm.bcast(self.evoluation_goal, root=0)
         except:
-            print(self.rank, 'reported errors in receiving evoluation_goal')
+            self.logger.error(self.rank, 'reported errors in receiving evoluation_goal')
             raise
 
-    def report_surival(self):
+    def tik(self, sec):
+        self.time += sec
+        time.sleep(sec)
+
+    def report_surival(self, current_iter, max_iter):
         status, msg = self.req_surv.test()
         if status:
             real_up_time = time.time() - self.start_time
@@ -33,10 +39,16 @@ class MPI_Agent(object):
                 'rank': self.rank,
                 'time': self.time,
                 'real_up_time': real_up_time,
+                'busy': self.busy_status,
+                'current_iter': current_iter,
+                'max_iter': max_iter
             }
             self.comm.isend(return_dict, dest=0, tag=TAGS.INFO_SURVIVAL)
-            print(f'Received survival test singal {msg} from overload, reported tik time {self.time}, real up time {real_up_time}.')
+            self.logger.info(f'Received survival test singal {msg} from overload, ' \
+                             f'reported tik time {self.time}, real up time {real_up_time},' \
+                             f'current completion rate {current_iter} / {max_iter}.')
             self.req_surv = self.comm.irecv(tag=1)
+        return
 
     def receive_job(self):
         status, msg = self.req_adjm.test()
@@ -52,6 +64,7 @@ class MPI_Agent(object):
         else:
             return None
 
+        self.busy_status = True
         self.g = tf.Graph()
         self.sess = tf.compat.v1.Session(graph=self.g)
 
@@ -62,7 +75,7 @@ class MPI_Agent(object):
                 goal = tf.convert_to_tensor(self.evoluation_goal)
                 goal_square_norm = tf.convert_to_tensor(np.mean(np.square(self.evoluation_goal)))
                 rse_loss = tf.reduce_mean(tf.square(output - goal)) / goal_square_norm
-                step = TN.opt_opeartions(tf.compat.v1.train.AdamOptimizer(0.001), rse_loss)
+                step = TN.opt_opeartions(self.optimizer(**self.optimizer_param), rse_loss)
                 var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=indv_scope)
 
         self.sess.run(tf.compat.v1.variables_initializer(var_list))
@@ -83,6 +96,7 @@ class MPI_Agent(object):
             'current_iter': current_iter,
         }
         self.comm.isend(return_dict, dest=0, tag=TAGS.DATA_RUN_REPORT)
+        self.busy_status = False
         return
 
     def evaluate(self, step, n_iter) -> None:
@@ -109,15 +123,26 @@ class MPI_Agent(object):
         self.req_surv = self.comm.irecv(source=0, tag=TAGS.INFO_SURVIVAL)
         self.sync_goal()
 
+        call_start_time = time.time()
+        current_iter, job, step, max_iterations, rse_loss = None, None, None, None, None
         while True:
-            self.report_surival()
-            job = self.receive_job()
-            if job:
-                step, max_iterations, rse_loss = job
-            else:
-                continue
+            self.report_surival(current_iter, max_iterations)
 
-        
+            if not self.busy_status:
+                job = self.receive_job()
+                if not job:
+                    self.tik(1)
+                    continue
+                else:
+                    step, max_iterations, rse_loss = job
+                    self.busy_status = True
+                    current_iter = 0
+
+            
+            if current_iter < max_iterations
+
+            
+
             if status:
                 if msg == "Done":
                     break
@@ -133,7 +158,7 @@ class MPI_Agent(object):
 
         self.req_adjm.Cancel();self.req_adjm.Free()
         self.req_surv.Cancel();self.req_surv.Free()
-        print(f'Rank {self.rank} finished.')
+        self.logger.info(f'Rank {self.rank} finished.')
         return
 
 
@@ -150,12 +175,12 @@ class MPI_Agent(object):
                 repeat = indv['repeat']
                 iters = indv['iters']
 
-                logging.info('Receiving individual {} for {}x{} ...'.format(scope, repeat, iters))
+                self.logger.info('Receiving individual {} for {}x{} ...'.format(scope, repeat, iters))
 
                 try:
                     repeat_loss = evaluate(tf_graph=g, sess=sess, indv_scope=scope, adj_matrix=adj_matrix, evaluate_repeat=repeat, max_iterations=iters,
                                                                     evoluation_goal=evoluation_goal, evoluation_goal_square_norm=evoluation_goal_square_norm)
-                    logging.info('Reporting result {}.'.format(repeat_loss))
+                    self.logger.info('Reporting result {}.'.format(repeat_loss))
                     np.savez(base_folder+'/result_pool/{}.npz'.format(scope.replace('/', '_')),
                                         repeat_loss=[ float('{:0.4f}'.format(l)) for l in repeat_loss ],
                                         adj_matrix=adj_matrix)

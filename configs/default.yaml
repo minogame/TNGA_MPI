@@ -1,5 +1,6 @@
 experiment:
     evoluation_goal: a.npy
+    max_generation: 100
 
 tensor_network:
     initializer: tf.compat.v1.random_normal_initializer

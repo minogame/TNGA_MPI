@@ -1,13 +1,12 @@
-import time
-
-
+import time, mpi4py
+import numpy as np
 
 
 class MPI_Overlord():
 
-    def __init__(self, max_generation=100, **kwargs):
-        self.dummy_func = lambda *args, **kwargs: None
-        self.max_generation = max_generation
+    def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
+        self.logger = kwargs['logger']
+        self.max_generation = kwargs['experiment']['max_generation']
         self.current_generation = None
         self.previous_generation = None
         self.N_generation = 0
@@ -27,14 +26,19 @@ class MPI_Overlord():
             func(**kwds)
         return
 
-    def __check_available_agent__(self):
+    def sync_goal(self):
+        goal = self.kwds['experiment']['evoluation_goal']
+        self.evoluation_goal = np.load(goal)
+        self.evoluation_goal = self.comm.bcast(self.evoluation_goal, root=0)
+
+    def check_agent_availablity(self):
         self.available_agents.clear()
         agents = glob.glob(base_folder+'/agent_pool/*.POOL')
         agents_id = [ a.split('/')[-1][:-5] for a in agents ]
 
         for aid in list(self.known_agents.keys()):
             if aid not in agents_id:
-                logging.info('Dead agent id = {} found!'.format(aid))
+                self.logger.info('Dead agent id = {} found!'.format(aid))
                 self.known_agents.pop(aid, None)
 
         for aid in agents_id:
@@ -43,7 +47,7 @@ class MPI_Overlord():
                     self.available_agents.append(self.known_agents[aid])
             else:
                 self.known_agents[aid] = Agent(sge_job_id=aid)
-                logging.info('New agent id = {} found!'.format(aid))
+                self.logger.info('New agent id = {} found!'.format(aid))
 
     def __assign_job__(self):
         self.__check_available_agent__()
@@ -55,13 +59,13 @@ class MPI_Overlord():
         self.current_generation.collect_indv()
 
     def __report_agents__(self):
-        logging.info('Current number of known agents is {}.'.format(len(self.known_agents)))
-        logging.info(list(self.known_agents.keys()))
+        self.logger.info('Current number of known agents is {}.'.format(len(self.known_agents)))
+        self.logger.info(list(self.known_agents.keys()))
 
     def __report_generation__(self):
-        logging.info('Current length of indv_to_distribute is {}.'.format(len(self.current_generation.indv_to_distribute)))
-        logging.info('Current length of indv_to_collect is {}.'.format(len(self.current_generation.indv_to_collect)))
-        logging.info([(indv.scope, indv.sge_job_id) for indv in self.current_generation.indv_to_collect])
+        self.logger.info('Current length of indv_to_distribute is {}.'.format(len(self.current_generation.indv_to_distribute)))
+        self.logger.info('Current length of indv_to_collect is {}.'.format(len(self.current_generation.indv_to_collect)))
+        self.logger.info([(indv.scope, indv.sge_job_id) for indv in self.current_generation.indv_to_collect])
 
     def __generation__(self):
         if self.N_generation > self.max_generation:

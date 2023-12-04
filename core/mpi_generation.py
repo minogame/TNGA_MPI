@@ -1,5 +1,5 @@
 import numpy as np
-import random, string
+import random, string, os
 
 
 class Individual(object):
@@ -11,7 +11,6 @@ class Individual(object):
         else:
             self.adj_matrix = adj_matrix
         self.scope = scope
-        self.sparsityB = np.sum(self.adj_matrix[np.triu_indices(self.adj_matrix.shape[0], 1)]>0)
         self.parents = kwargs['parents'] if 'parents' in kwargs.keys() else None
         self.repeat = kwargs['evaluate_repeat'] if 'evaluate_repeat' in kwargs.keys() else 1
         self.iters = kwargs['max_iterations'] if 'max_iterations' in kwargs.keys() else 10000
@@ -22,6 +21,7 @@ class Individual(object):
         self.present_elements = np.prod(np.diag(adj_matrix_k))
         self.actual_elements = np.sum([ np.prod(adj_matrix_k[d]) for d in range(self.dim) ])
         self.sparsity = self.actual_elements/self.present_elements
+        self.sparsity_connection = np.sum(self.adj_matrix[np.triu_indices(self.adj_matrix.shape[0], 1)]>0)
 
     def deploy(self, sge_job_id):
         try:
@@ -120,7 +120,7 @@ class Generation(object):
 
         def immigration(islands, number=5):
             island_A, island_B = islands
-            logging.info('immigration happend!')
+            self.logger.info('immigration happend!')
             for _ in range(number):
                 island_B.append(island_A.pop(0))
                 island_A.append(island_B.pop(0))
@@ -186,10 +186,9 @@ class Generation(object):
     def __evaluate__(self):
 
         def score2rank(island, idx):
-            sigmoid = lambda x : 1.0 / (1.0 + np.exp(-x))
             score = island['score']
-            sparsity_score = [ s for s, l in score ]
-            loss_score = [ l for s, l in score ]
+            sparsity_score = [ s for s, _ in score ]
+            loss_score = [ l for _, l in score ]
 
             if 'fitness_func' in self.kwargs.keys():
                 if isinstance(self.kwargs['fitness_func'], list):
@@ -215,15 +214,15 @@ class Generation(object):
             if np.log10(indv.sparsity)<1.0:
                 agent.receive(indv)
                 self.indv_to_collect.append(indv)
-                logging.info('Assigned individual {} to agent {}.'.format(indv.scope, agent.sge_job_id))
+                self.logger.info('Assigned individual {} to agent {}.'.format(indv.scope, agent.sge_job_id))
             else:
                 indv.collect(fake_loss=True)
-                logging.info('Individual {} is killed due to its sparsity = {} / {}.'.format(indv.scope, np.log10(indv.sparsity), indv.sparsityB))
+                self.logger.info('Individual {} is killed due to its sparsity = {} / {}.'.format(indv.scope, np.log10(indv.sparsity), indv.sparsity_connection))
 
     def collect_indv(self):
         for indv in self.indv_to_collect:
             if indv.collect():
-                logging.info('Collected individual result {}.'.format(indv.scope))
+                self.logger.info('Collected individual result {}.'.format(indv.scope))
                 self.indv_to_collect.remove(indv)
 
     def is_finished(self):
