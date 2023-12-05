@@ -16,6 +16,7 @@ class MPI_Agent(object):
         self.time = 0
         self.start_time = time.time()
         self.logger = kwargs['logger']
+        self.logger.info(f'MPI_Agent {self.rank} started.')
         self.optimizer = kwargs['optimization']['optimizer']
         self.optimizer_param = kwargs['optimization']['optimizer_params']
 
@@ -79,10 +80,25 @@ class MPI_Agent(object):
                 var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=indv_scope)
 
         self.sess.run(tf.compat.v1.variables_initializer(var_list))
+        self.logger.info(f'Received job indv {indv_scope} from overload, ' \
+                         f'gonna run {max_iterations}.')
 
         return step, max_iterations, rse_loss
 
-    def report_result(self, rse_loss, current_iter):
+    def report_estimation(self, rse_loss, required_time):
+        loss = self.sess.run(rse_loss)
+
+        return_dict = {
+            'rank': self.rank,
+            'loss': loss,
+            'required_time': required_time,
+        }
+        self.comm.isend(return_dict, dest=0, tag=TAGS.INFO_TIME_ESTIMATION)
+        self.logger.info(f'Reporting estimiation time {required_time} with current loss {loss}.')
+
+        return
+
+    def report_result(self, rse_loss, current_iter, reason):
 
         loss = self.sess.run(rse_loss)
         self.sess.close()
@@ -94,10 +110,13 @@ class MPI_Agent(object):
             'rank': self.rank,
             'loss': loss,
             'current_iter': current_iter,
+            'reason': reason,
         }
         self.comm.isend(return_dict, dest=0, tag=TAGS.DATA_RUN_REPORT)
         self.busy_status = False
+        self.logger.info(f'Reporting result {loss} at iteration {current_iter} with reason {reason}.')
         return
+
 
     def evaluate(self, step, n_iter) -> None:
         for i in range(n_iter): 
@@ -124,10 +143,21 @@ class MPI_Agent(object):
         self.sync_goal()
 
         call_start_time = time.time()
+        timeout = self.kwargs['agent_behavier']['timeout']
+        n_iter = self.kwargs['agent_behavier']['n_iter']
+        estimation_iter = self.kwargs['agent_behavier']['estimation_iter']
+
+        if estimation_iter % n_iter:
+            estimation_iter = int(estimation_iter/n_iter) * estimation_iter
+
+        allow_fewer_repeat_after_timeout = self.kwargs['agent_behavier']['allow_fewer_repeat_after_timeout']
+        allow_waiting_after_timeout_rate = self.kwargs['agent_behavier']['allow_waiting_after_timeout_rate']
+
         current_iter, job, step, max_iterations, rse_loss = None, None, None, None, None
         while True:
             self.report_surival(current_iter, max_iterations)
 
+            # waiting for job
             if not self.busy_status:
                 job = self.receive_job()
                 if not job:
@@ -138,8 +168,22 @@ class MPI_Agent(object):
                     self.busy_status = True
                     current_iter = 0
 
+            # received job, everything is fine
+            if current_iter < max_iterations:
+
+                if current_iter == estimation_iter:
+                    required_time = (max_iterations / estimation_iter) * (time.time() - call_start_time)
+                    self.report_estimation(rse_loss, required_time)
+
+                if time.time() - call_start_time < timeout:
+                    self.evaluate(step, n_iter)
+
+                # timeout
+
             
-            if current_iter < max_iterations
+            else:
+
+
 
             
 
@@ -158,7 +202,7 @@ class MPI_Agent(object):
 
         self.req_adjm.Cancel();self.req_adjm.Free()
         self.req_surv.Cancel();self.req_surv.Free()
-        self.logger.info(f'Rank {self.rank} finished.')
+        self.logger.info(f'MPI_Agent {self.rank} finished.')
         return
 
 
@@ -180,7 +224,7 @@ class MPI_Agent(object):
                 try:
                     repeat_loss = evaluate(tf_graph=g, sess=sess, indv_scope=scope, adj_matrix=adj_matrix, evaluate_repeat=repeat, max_iterations=iters,
                                                                     evoluation_goal=evoluation_goal, evoluation_goal_square_norm=evoluation_goal_square_norm)
-                    self.logger.info('Reporting result {}.'.format(repeat_loss))
+                    
                     np.savez(base_folder+'/result_pool/{}.npz'.format(scope.replace('/', '_')),
                                         repeat_loss=[ float('{:0.4f}'.format(l)) for l in repeat_loss ],
                                         adj_matrix=adj_matrix)

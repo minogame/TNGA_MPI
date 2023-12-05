@@ -16,9 +16,12 @@ optimization:
         learning_rate: 0.001
 
 agent_behavier:
+    n_iter: 10
+    estimation_iter: 100
     timeout: 1800
-    allow_fewer_repeat_after_timeout: True
+    allow_waiting_after_timeout_rate: 0.5
 
 generation_property:
     n_individuals_span: 200
-    n_individuals_survive: 100
+    n_individuals_survive: 100 
+    allow_fewer_repeat_after_timeout: True
