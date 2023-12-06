@@ -1,8 +1,25 @@
 import time, mpi4py
 import numpy as np
+import functools
 
 
 class MPI_Overlord():
+
+    ## OVERLORD SEND:
+    ## 1. survival ping
+    ## 2. job data
+
+    ## OVERLORD RECEIVE
+    ## 1. survival info
+    ## 2. abnormal when receiving job
+    ## 3. estimation info
+    ## 4. job result report
+
+    ## SINGLE JOB PIPELINE
+    ## 1. overlord match an agent and an individual
+    ## 2. overlord ask the individual to submit the data
+    ## 3. overlord isend the data to agent
+    ## 4. overlord receive result and report to the individual
 
     def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
         self.logger = kwargs['logger']

@@ -6,9 +6,19 @@ import tensorflow as tf
 tf.compat.v1.disable_eager_execution()
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import mpi4py
-from mpi_core import TAGS
+from mpi_core import TAGS, REASONS, SURVIVAL
 
 class MPI_Agent(object):
+
+    ## AGENT SEND:
+    ## 1. survival info
+    ## 2. abnormal when receiving job
+    ## 3. estimation info
+    ## 4. job result report
+
+    ## AGENT RECEIVE
+    ## 1. survival ping
+    ## 2. job data 
 
     def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
         self.kwargs = kwargs
@@ -35,6 +45,7 @@ class MPI_Agent(object):
     def report_surival(self, current_iter, max_iter):
         status, msg = self.req_surv.test()
         if status:
+            if msg: return msg
             real_up_time = time.time() - self.start_time
             return_dict = {
                 'rank': self.rank,
@@ -45,11 +56,11 @@ class MPI_Agent(object):
                 'max_iter': max_iter
             }
             self.comm.isend(return_dict, dest=0, tag=TAGS.INFO_SURVIVAL)
-            self.logger.info(f'Received survival test singal {msg} from overload, ' \
+            self.logger.info(f'Received survival test singal {SURVIVAL[msg]} from overload, ' \
                              f'reported tik time {self.time}, real up time {real_up_time},' \
                              f'current completion rate {current_iter} / {max_iter}.')
             self.req_surv = self.comm.irecv(tag=1)
-        return
+        return msg
 
     def receive_job(self):
         status, msg = self.req_adjm.test()
@@ -150,12 +161,14 @@ class MPI_Agent(object):
         if estimation_iter % n_iter:
             estimation_iter = int(estimation_iter/n_iter) * estimation_iter
 
-        allow_fewer_repeat_after_timeout = self.kwargs['agent_behavier']['allow_fewer_repeat_after_timeout']
         allow_waiting_after_timeout_rate = self.kwargs['agent_behavier']['allow_waiting_after_timeout_rate']
 
         current_iter, job, step, max_iterations, rse_loss = None, None, None, None, None
         while True:
-            self.report_surival(current_iter, max_iterations)
+            msg = self.report_surival(current_iter, max_iterations)
+            if msg:
+                self.logger.info(f'Received single {SURVIVAL[msg]} from host, breaking from while loop.')
+                break
 
             # waiting for job
             if not self.busy_status:
@@ -175,66 +188,24 @@ class MPI_Agent(object):
                     required_time = (max_iterations / estimation_iter) * (time.time() - call_start_time)
                     self.report_estimation(rse_loss, required_time)
 
+                # in time
                 if time.time() - call_start_time < timeout:
                     self.evaluate(step, n_iter)
 
                 # timeout
-
+                else:
+                    # wait until finish
+                    if current_iter / max_iterations > allow_waiting_after_timeout_rate:
+                        self.evaluate(step, n_iter)
+                    
+                    else:
+                        self.report_result(rse_loss, current_iter, REASONS.HARD_TIMEOUT)
             
             else:
-
-
-
-            
-
-            if status:
-                if msg == "Done":
-                    break
-                else:
-                    time.sleep(random.randint(1, 3))
-                    self.comm.send((msg*2, self.rank), dest=0, tag=0)
-                req = self.comm.irecv()
-            
-            if random.randint(0, 20) == 13:
-                self.comm.isend(('AAAA', self.rank), dest=0, tag=1)
-            time.sleep(1)
-
+                self.report_result(rse_loss, current_iter, REASONS.REACH_MAX_ITER)
 
         self.req_adjm.Cancel();self.req_adjm.Free()
         self.req_surv.Cancel();self.req_surv.Free()
         self.logger.info(f'MPI_Agent {self.rank} finished.')
+
         return
-
-
-
-    
-        while True:
-            flag, evoluation_goal = check_and_load(agent_id)
-            if flag:
-                evoluation_goal_square_norm=
-                indv = np.load(base_folder+'/job_pool/{}.npz'.format(agent_id))
-
-                scope = indv['scope'].tolist()
-                adj_matrix = indv['adj_matrix']
-                repeat = indv['repeat']
-                iters = indv['iters']
-
-                self.logger.info('Receiving individual {} for {}x{} ...'.format(scope, repeat, iters))
-
-                try:
-                    repeat_loss = evaluate(tf_graph=g, sess=sess, indv_scope=scope, adj_matrix=adj_matrix, evaluate_repeat=repeat, max_iterations=iters,
-                                                                    evoluation_goal=evoluation_goal, evoluation_goal_square_norm=evoluation_goal_square_norm)
-                    
-                    np.savez(base_folder+'/result_pool/{}.npz'.format(scope.replace('/', '_')),
-                                        repeat_loss=[ float('{:0.4f}'.format(l)) for l in repeat_loss ],
-                                        adj_matrix=adj_matrix)
-
-                    os.remove(base_folder+'/job_pool/{}.npz'.format(agent_id))
-                    open(base_folder+'/agent_pool/{}.POOL'.format(agent_id), 'w').close()
-
-                except Exception as e:
-                    os.remove(base_folder+'/agent_pool/{}.POOL'.format(agent_id))
-                    raise e
-
-
-            time.sleep(1)
