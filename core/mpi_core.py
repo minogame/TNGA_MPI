@@ -1,5 +1,3 @@
-import inspect
-
 class TAGS:
     __rdict__ = {}
     DATA_ADJ_MATRIX = 0
@@ -21,6 +19,9 @@ class REASONS:
     __rdict__ = {}
     REACH_MAX_ITER = 0
     HARD_TIMEOUT = 1
+
+class DUMMYINDV:
+    pass
 
 def init_rdict(c):
     for k, v in c.__dict__.items():

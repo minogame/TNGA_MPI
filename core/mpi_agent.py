@@ -20,9 +20,10 @@ class MPI_Agent(object):
     ## 1. survival ping
     ## 2. job data 
 
-    def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
+    def __init__(self, comm: mpi4py.MPI.COMM_WORLD, rank: int, **kwargs) -> None:
         self.kwargs = kwargs
         self.comm = comm
+        self.rank = rank
         self.time = 0
         self.start_time = time.time()
         self.logger = kwargs['logger']

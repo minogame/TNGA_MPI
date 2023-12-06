@@ -1,6 +1,8 @@
 import time, mpi4py
 import numpy as np
 import functools
+from mpi_generation import Generation, Individual
+from mpi_core import TAGS, REASONS
 
 
 class MPI_Overlord():
@@ -21,24 +23,27 @@ class MPI_Overlord():
     ## 3. overlord isend the data to agent
     ## 4. overlord receive result and report to the individual
 
-    def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
-        self.kwargs = kwargs
-        self.logger = kwargs['logger']
 
+    def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwds) -> None:
+        self.kwds = kwds
+        self.logger = kwds['logger']
 
         # generation
-        self.max_generation = kwargs['experiment']['max_generation']
+        self.max_generation = kwds['experiment']['max_generation']
         self.current_generation = None
         self.previous_generation = None
         self.N_generation = 0
 
-        self.generation = kwargs['generation']
+        self.generation = kwds['generation']
         self.generation_list = []
 
 
         self.available_agents = []
         self.known_agents = {}
         self.time = 0
+
+        ## trick call with interval
+        self.check_agent_availablity_with_interval = functools.partial(self.call_with_interval, func=self.check_agent_availablity)
 
     def tik(self, sec):
         self.time += sec
@@ -81,58 +86,52 @@ class MPI_Overlord():
     def __collect_result__(self):
         self.current_generation.collect_indv()
 
-    def __report_agents__(self):
-        self.logger.info('Current number of known agents is {}.'.format(len(self.known_agents)))
-        self.logger.info(list(self.known_agents.keys()))
-
     def __report_generation__(self):
         self.logger.info('Current length of indv_to_distribute is {}.'.format(len(self.current_generation.indv_to_distribute)))
         self.logger.info('Current length of indv_to_collect is {}.'.format(len(self.current_generation.indv_to_collect)))
         self.logger.info([(indv.scope, indv.sge_job_id) for indv in self.current_generation.indv_to_collect])
 
-    def __generation__(self):
+
+    def __report_agents__(self):
+        self.logger.info('Current number of known agents is {}.'.format(len(self.known_agents)))
+        self.logger.info(list(self.known_agents.keys()))
+
+    def span_generation(self):
         if self.N_generation > self.max_generation:
             return False
         else:
             if self.current_generation is None:
-                self.current_generation = self.generation(name='generation_init', **self.kwargs)
+                self.current_generation = self.generation(name='generation_init', **self.kwds)
                 self.current_generation.indv_to_distribute = []
 
             if self.current_generation.is_finished():
                 if self.previous_generation is not None:
-                    self.current_generation(**self.kwargs)
+                    self.current_generation(**self.kwds)
                 self.N_generation += 1
                 self.previous_generation = self.current_generation
                 self.current_generation = self.generation(self.previous_generation, 
-                                                        name='generation_{:03d}'.format(self.N_generation), **self.kwargs)
+                                                        name='generation_{:03d}'.format(self.N_generation), **self.kwds)
 
             return True
 
     def __call__(self):
-        while self.__generation__():
-            self.__call_with_interval__(self.__check_available_agent__, 4)()
-            self.__call_with_interval__(self.__assign_job__, 4)()
-            self.__call_with_interval__(self.__collect_result__, 4)()
-            self.__call_with_interval__(self.__report_agents__, 180)()
-            self.__call_with_interval__(self.__report_generation__, 160)()
+        ## when the overload is called
+        ## 1. initilize 4 mpi recv comm
+        ## 2. sync goal with the rank = 0
+        ## 3. entering the main generation spanning loop
+        ## 4. clean comm and send finish msg to all the agents
+
+        self.req_adjm = self.comm.irecv(source=0, tag=TAGS.DATA_ADJ_MATRIX)
+        self.req_surv = self.comm.irecv(source=0, tag=TAGS.INFO_SURVIVAL)
+        self.sync_goal()
+        while self.span_generation():
+            self.call_with_interval(self.__check_available_agent__, 4)
+            self.call_with_interval(self.__assign_job__, 4)
+            self.call_with_interval(self.__collect_result__, 4)
+            self.call_with_interval(self.__report_agents__, 180)
+            self.call_with_interval(self.__report_generation__, 160)
             self.__tik__(2)
 
-
-
-
-def score_summary(obj):
-    logging.info('===== {} ====='.format(obj.name))
-
-    for k, v in obj.societies.items():
-        logging.info('===== ISLAND {} ====='.format(k))
-
-        for idx, indv in enumerate(v['indv']):
-            if idx == v['rank'][0]:
-                logging.info('\033[31m{} | {:.3f} | {} | {:.5f} | {}\033[0m'.format(indv.scope, np.log10(indv.sparsity), [ float('{:0.4f}'.format(l)) for l in indv.repeat_loss ], v['total'][idx], indv.parents))
-                logging.info(indv.adj_matrix)
-            else:
-                logging.info('{} | {:.3f} | {} | {:.5f} | {}'.format(indv.scope, np.log10(indv.sparsity), [ float('{:0.4f}'.format(l)) for l in indv.repeat_loss ], v['total'][idx], indv.parents))
-                logging.info(indv.adj_matrix)
 
 if __name__ == '__main__':
     pipeline = Overlord(# GENERATION PROPERTIES

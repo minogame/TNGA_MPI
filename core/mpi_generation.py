@@ -1,19 +1,20 @@
 import numpy as np
 import random, string, os
+from evolve import EVOLVE_OPS
 
 
 class Individual(object):
 
-    def __init__(self, adj_matrix=None, scope=None, **kwargs):
+    def __init__(self, adj_matrix=None, scope=None, **kwds):
         super(Individual, self).__init__()
         if adj_matrix is None:
-            self.adj_matrix = kwargs['adj_func'](**kwargs)
+            self.adj_matrix = kwds['adj_func'](**kwds)
         else:
             self.adj_matrix = adj_matrix
         self.scope = scope
-        self.parents = kwargs['parents'] if 'parents' in kwargs.keys() else None
-        self.repeat = kwargs['evaluate_repeat'] if 'evaluate_repeat' in kwargs.keys() else 1
-        self.iters = kwargs['max_iterations'] if 'max_iterations' in kwargs.keys() else 10000
+        self.parents = kwds['parents'] if 'parents' in kwds.keys() else None
+        self.repeat = kwds['evaluate_repeat'] if 'evaluate_repeat' in kwds.keys() else 1
+        self.iters = kwds['max_iterations'] if 'max_iterations' in kwds.keys() else 10000
         self.dim = self.adj_matrix.shape[0]
         self.adj_matrix[np.tril_indices(self.dim, -1)] = self.adj_matrix.transpose()[np.tril_indices(self.dim, -1)]
         adj_matrix_k = np.copy(self.adj_matrix)
@@ -47,17 +48,21 @@ class Individual(object):
             return True      
 
 class Generation(object):
-    class DummyIndv: pass
 
-    def __init__(self, pG=None, name=None, **kwargs):
+    ## When generation is called:
+    ## 1. check is_finished.
+    ## 2. if finished, do evaluate and evolve, then report.
+    ## 3. if not finished, report the schedule table.
+
+    def __init__(self, pG=None, name=None, **kwds):
         super(Generation, self).__init__()
         self.name = name
-        self.N_islands = kwargs['N_islands'] if 'N_islands' in kwargs.keys() else 1
-        self.kwargs = kwargs
-        self.out = self.kwargs['out']
-        self.rank = self.kwargs['rank']
-        self.size = self.kwargs['size']
-        self.init_sparsity = kwargs['init_sparsity'] if 'init_sparsity' in kwargs.keys() else 0.8
+        self.N_islands = kwds['N_islands'] if 'N_islands' in kwds.keys() else 1
+        self.kwds = kwds
+        self.out = self.kwds['out']
+        self.tn_rank = self.kwds['rank']
+        self.tn_size = self.kwds['size']
+        self.init_sparsity = kwds['init_sparsity'] if 'init_sparsity' in kwds.keys() else 0.8
         self.indv_to_collect = []
         self.indv_to_distribute = []
         if pG is not None:
@@ -66,122 +71,69 @@ class Generation(object):
                 self.societies[k] = {}
                 self.societies[k]['indv'] = \
                         [ Individual(adj_matrix=indv.adj_matrix, parents=indv.parents,
-                          scope='{}/{}/{:03d}'.format(self.name, k, idx), **self.kwargs) \
+                          scope='{}/{}/{:03d}'.format(self.name, k, idx), **self.kwds) \
                         for idx, indv in enumerate(v['indv']) ]
                 self.indv_to_distribute += [indv for indv in self.societies[k]['indv']]
 
-        elif 'random_init' in kwargs.keys():
+        elif 'random_init' in kwds.keys():
             self.societies = {}
-            for n in range(self.kwargs['N_islands']):
+            for n in range(self.kwds['N_islands']):
                 society_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
                 self.societies[society_name] = {}
                 self.societies[society_name]['indv'] = [ \
                         Individual(scope='{}/{}/{:03d}'.format(self.name, society_name, i), 
-                        adj_func=self.__random_adj_matrix__, **self.kwargs) \
-                        for i in range(self.kwargs['population'][n]) ]
+                        adj_func=self.__random_adj_matrix__, **self.kwds) \
+                        for i in range(self.kwds['population'][n]) ]
                 self.indv_to_distribute += [indv for indv in self.societies[society_name]['indv']]
 
-    def __call__(self, **kwargs):
+    def __call__(self, **kwds):
         try:
             self.__evaluate__()
-            if 'callbacks' in kwargs.keys():
-                for c in kwargs['callbacks']:
+            if 'callbacks' in kwds.keys():
+                for c in kwds['callbacks']:
                     c(self)
             self.__evolve__()
             return True
         except Exception as e:
             raise e
 
-    def __random_adj_matrix__(self, **kwargs):
+    def __random_adj_matrix__(self, **kwds):
         if isinstance(self.out, list):
             adj_matrix = np.diag(self.out)
         else:
-            adj_matrix = np.diag([self.out]*self.size)
+            adj_matrix = np.diag([self.out]*self.tn_size)
 
         if self.init_sparsity < 0:
             connection = []
             real_init_sparsity = np.random.uniform(low=-self.init_sparsity, high=1.0)
-            for i in range(np.sum(np.arange(self.size))):
-                connection.append(int(np.random.uniform()>real_init_sparsity)*self.rank)
+            for i in range(np.sum(np.arange(self.tn_size))):
+                connection.append(int(np.random.uniform()>real_init_sparsity)*self.tn_rank)
         else:
-            connection = [ int(np.random.uniform()>self.init_sparsity)*self.rank for i in range(np.sum(np.arange(self.size)))]
-        adj_matrix[np.triu_indices(self.size, 1)] = connection
+            connection = [ int(np.random.uniform()>self.init_sparsity)*self.tn_rank for i in range(np.sum(np.arange(self.tn_size)))]
+        adj_matrix[np.triu_indices(self.tn_size, 1)] = connection
         return adj_matrix
 
     def __evolve__(self):
-        def mutation(indv, prob):
-            dim = indv.adj_matrix.shape[0]
-            elements = np.stack(np.triu_indices(dim, 1)).transpose()
-            mask = np.random.uniform(size=elements.shape[0])<prob
-            mutated_elements = tuple(map(tuple, elements[mask].transpose()))
-            if mutated_elements:
-                indv.adj_matrix[mutated_elements] = self.rank - indv.adj_matrix[mutated_elements]
-                indv.adj_matrix[np.tril_indices(dim, -1)] = indv.adj_matrix.transpose()[np.tril_indices(dim, -1)]
-
-        def immigration(islands, number=5):
-            island_A, island_B = islands
-            self.logger.info('immigration happend!')
-            for _ in range(number):
-                island_B.append(island_A.pop(0))
-                island_A.append(island_B.pop(0))
-
-        def elimination(island, threshold=80):
-            island['rank'] = island['rank'][:threshold]
-            island['indv'] = [island['indv'][i] for i in island['rank']]
-            island['total'] = [island['total'][i] for i in island['rank']]
-
-        def crossover(island, population, alpha=5):
-            __adj_matrix__, __parents__ = [], []
-            def propagation(couple, percent=0.5):
-                adj_matrix_male = np.copy(couple[0].adj_matrix)
-                adj_matrix_female = np.copy(couple[1].adj_matrix)
-
-                dim = adj_matrix_male.shape[0]
-                exchange_core = choice(list(range(dim)))
-
-                exchange = adj_matrix_male[exchange_core]
-                adj_matrix_male[exchange_core] = adj_matrix_female[exchange_core] 
-                adj_matrix_female[exchange_core] = exchange
-
-                adj_matrix_male[np.tril_indices(dim, -1)] = adj_matrix_male.transpose()[np.tril_indices(dim, -1)]
-                adj_matrix_female[np.tril_indices(dim, -1)] = adj_matrix_female.transpose()[np.tril_indices(dim, -1)]
-
-                __adj_matrix__.append(adj_matrix_male)
-                __adj_matrix__.append(adj_matrix_female)
-                __parents__.append((couple[0].scope[-13:], couple[1].scope[-13:]))
-                __parents__.append((couple[0].scope[-13:], couple[1].scope[-13:]))
-
-            indv, fitness = island['indv'], island['total']
-            rank = np.argsort(fitness)
-            # prob = [ 1.0/(1e-5+f)*alpha for f in fitness]        
-            # p = [ np.exp(3/(1+k)) for k in range(len(indv)) ]
-            p = [ np.maximum(np.log(float(sys.argv[4])/(0.01+k*5)), 0.01) for k in range(population) ]
-            prob = np.zeros(len(indv))
-            for idx, i in enumerate(rank): prob[i] = p[idx]
-            for i in range(population//2): propagation(choices(indv, weights=prob, k=2))
-            for i in range(population-len(indv)): indv.append(DummyIndv())
-            for v, m, p in zip(indv, __adj_matrix__, __parents__): v.adj_matrix, v.parents = m, p
-
         # ELIMINATION
-        if 'elimiation_threshold' in self.kwargs:
+        if 'elimiation_threshold' in self.kwds:
             for idx, (k, v) in enumerate(self.societies.items()):
-                elimination(v, self.kwargs['elimiation_threshold'][idx])
+                EVOLVE_OPS.elimination(v, self.kwds['elimiation_threshold'][idx])
 
         # IMMIRATION
-        if 'immigration_prob' in self.kwargs:
-            if np.random.uniform()<self.kwargs['immigration_prob']:
-                immigration(sample([v['indv'] for k, v in self.societies.items()], k=2), self.kwargs['immigration_number'])
+        if 'immigration_prob' in self.kwds:
+            if np.random.uniform()<self.kwds['immigration_prob']:
+                EVOLVE_OPS.immigration(random.sample([v['indv'] for k, v in self.societies.items()], k=2), self.kwds['immigration_number'])
 
         # CROSSOVER
-        if 'crossover_alpha' in self.kwargs:
+        if 'crossover_alpha' in self.kwds:
             for idx, (k, v) in enumerate(self.societies.items()):
-                crossover(v, self.kwargs['population'][idx], self.kwargs['crossover_alpha'])
+                EVOLVE_OPS.crossover(v, self.kwds['population'][idx], self.kwds['crossover_alpha'])
 
         # MUTATION
-        if 'mutation_prob' in self.kwargs:
+        if 'mutation_prob' in self.kwds:
             for k, v in self.societies.items():
                 for indv in v['indv']:
-                    mutation(indv, self.kwargs['mutation_prob'])
+                    EVOLVE_OPS.mutation(indv, self.kwds['mutation_prob'])
 
     def __evaluate__(self):
 
@@ -190,11 +142,11 @@ class Generation(object):
             sparsity_score = [ s for s, _ in score ]
             loss_score = [ l for _, l in score ]
 
-            if 'fitness_func' in self.kwargs.keys():
-                if isinstance(self.kwargs['fitness_func'], list):
-                    fitness_func = self.kwargs['fitness_func'][idx]
+            if 'fitness_func' in self.kwds.keys():
+                if isinstance(self.kwds['fitness_func'], list):
+                    fitness_func = self.kwds['fitness_func'][idx]
                 else:
-                    fitness_func = self.kwargs['fitness_func']
+                    fitness_func = self.kwds['fitness_func']
             else:        
                 fitness_func = lambda s, l: s+100*l
             
