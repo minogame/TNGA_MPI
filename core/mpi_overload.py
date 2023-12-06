@@ -22,14 +22,20 @@ class MPI_Overlord():
     ## 4. overlord receive result and report to the individual
 
     def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
+        self.kwargs = kwargs
         self.logger = kwargs['logger']
+
+
+        # generation
         self.max_generation = kwargs['experiment']['max_generation']
         self.current_generation = None
         self.previous_generation = None
         self.N_generation = 0
-        self.kwargs = kwargs
+
         self.generation = kwargs['generation']
         self.generation_list = []
+
+
         self.available_agents = []
         self.known_agents = {}
         self.time = 0
@@ -110,3 +116,38 @@ class MPI_Overlord():
             self.__call_with_interval__(self.__report_agents__, 180)()
             self.__call_with_interval__(self.__report_generation__, 160)()
             self.__tik__(2)
+
+
+
+
+def score_summary(obj):
+    logging.info('===== {} ====='.format(obj.name))
+
+    for k, v in obj.societies.items():
+        logging.info('===== ISLAND {} ====='.format(k))
+
+        for idx, indv in enumerate(v['indv']):
+            if idx == v['rank'][0]:
+                logging.info('\033[31m{} | {:.3f} | {} | {:.5f} | {}\033[0m'.format(indv.scope, np.log10(indv.sparsity), [ float('{:0.4f}'.format(l)) for l in indv.repeat_loss ], v['total'][idx], indv.parents))
+                logging.info(indv.adj_matrix)
+            else:
+                logging.info('{} | {:.3f} | {} | {:.5f} | {}'.format(indv.scope, np.log10(indv.sparsity), [ float('{:0.4f}'.format(l)) for l in indv.repeat_loss ], v['total'][idx], indv.parents))
+                logging.info(indv.adj_matrix)
+
+if __name__ == '__main__':
+    pipeline = Overlord(# GENERATION PROPERTIES
+                        max_generation=30, generation=Generation, random_init=True,
+                        # ISLAND PROPERTIES
+                        N_islands=1, population=[int(sys.argv[2])], 
+                        # INVIDUAL PROPERTIES
+                        size=4, rank=2, out=2, init_sparsity=-0.00001,
+                        # EVALUATION PROPERTIES
+                        evaluate_repeat=2, max_iterations=10000,
+                        fitness_func=[ lambda s,l: s+l*50],
+                        #
+                        # EVOLUTION PROPERTIES
+                        elimiation_threshold=[int(sys.argv[3])], immigration_prob=0, immigration_number=5,
+                        crossover_alpha=1, mutation_prob=0.05,
+                        # FOR COMPUTATION
+                        callbacks=[score_summary])
+    pipeline()
