@@ -20,6 +20,7 @@ class MPI_Agent(object):
     ## 1. survival ping
     ## 2. job data 
 
+    ################ UTILS ################
     def __init__(self, comm: mpi4py.MPI.COMM_WORLD, rank: int, **kwargs) -> None:
         self.kwargs = kwargs
         self.comm = comm
@@ -31,6 +32,11 @@ class MPI_Agent(object):
         self.optimizer = kwargs['optimization']['optimizer']
         self.optimizer_param = kwargs['optimization']['optimizer_params']
 
+    def tik(self, sec):
+        self.time += sec
+        time.sleep(sec)
+
+    ################ MPI COMMUNICATION ################
     def sync_goal(self):
         try:
             self.evoluation_goal = None
@@ -38,10 +44,6 @@ class MPI_Agent(object):
         except:
             self.logger.error(self.rank, 'reported errors in receiving evoluation_goal')
             raise
-
-    def tik(self, sec):
-        self.time += sec
-        time.sleep(sec)
 
     def report_surival(self, current_iter, max_iter):
         status, msg = self.req_surv.test()
@@ -67,15 +69,28 @@ class MPI_Agent(object):
         status, msg = self.req_adjm.test()
         if status:
             try:
-                indv_scope = msg['indv_scope']
-                adj_matrix = msg['adj_matrix']
-                max_iterations = msg['max_iterations']
+                return self.prepare_job(msg)
             except:
                 self.req_adjm.Cancel();self.req_adjm.Free()
                 self.req_adjm = self.comm.irecv(source=0, tag=TAGS.DATA_ADJ_MATRIX)
                 self.comm.isend(self.rank, dest=0, tag=TAGS.INFO_ABNORMAL)
         else:
             return None
+
+    def report_estimation(self, return_dict):
+        self.comm.isend(return_dict, dest=0, tag=TAGS.INFO_TIME_ESTIMATION)
+        return
+    
+    def report_result(self, report):
+        self.comm.isend(report, dest=0, tag=TAGS.DATA_RUN_REPORT)
+        self.busy_status = False
+        return
+    
+    ################ DO JOB WITH TF ################
+    def prepare_job(self, msg):
+        indv_scope = msg['indv_scope']
+        adj_matrix = msg['adj_matrix']
+        max_iterations = msg['max_iterations']
 
         self.busy_status = True
         self.g = tf.Graph()
@@ -96,8 +111,8 @@ class MPI_Agent(object):
                          f'gonna run {max_iterations}.')
 
         return step, max_iterations, rse_loss
-
-    def report_estimation(self, rse_loss, required_time):
+    
+    def do_estimation(self, rse_loss, required_time):
         loss = self.sess.run(rse_loss)
 
         return_dict = {
@@ -105,12 +120,11 @@ class MPI_Agent(object):
             'loss': loss,
             'required_time': required_time,
         }
-        self.comm.isend(return_dict, dest=0, tag=TAGS.INFO_TIME_ESTIMATION)
         self.logger.info(f'Reporting estimiation time {required_time} with current loss {loss}.')
 
-        return
+        return return_dict
 
-    def report_result(self, rse_loss, current_iter, reason):
+    def prepare_report_reuslt(self, rse_loss, current_iter, reason):
 
         loss = self.sess.run(rse_loss)
         self.sess.close()
@@ -124,16 +138,16 @@ class MPI_Agent(object):
             'current_iter': current_iter,
             'reason': reason,
         }
-        self.comm.isend(return_dict, dest=0, tag=TAGS.DATA_RUN_REPORT)
-        self.busy_status = False
         self.logger.info(f'Reporting result {loss} at iteration {current_iter} with reason {reason}.')
-        return
 
+        return return_dict
 
     def evaluate(self, step, n_iter) -> None:
         for i in range(n_iter): 
             self.sess.run(step)
         return 
+
+    ################ ENTRANCE ################
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         ## when the agent is called
@@ -187,7 +201,8 @@ class MPI_Agent(object):
 
                 if current_iter == estimation_iter:
                     required_time = (max_iterations / estimation_iter) * (time.time() - call_start_time)
-                    self.report_estimation(rse_loss, required_time)
+                    estimatation_report = self.do_estimation(rse_loss, required_time)
+                    self.report_estimation(estimatation_report)
 
                 # in time
                 if time.time() - call_start_time < timeout:
@@ -200,10 +215,12 @@ class MPI_Agent(object):
                         self.evaluate(step, n_iter)
                     
                     else:
-                        self.report_result(rse_loss, current_iter, REASONS.HARD_TIMEOUT)
+                        report = self.prepare_report_reuslt(rse_loss, current_iter, REASONS.HARD_TIMEOUT)
+                        self.report_result(report)
             
             else:
-                self.report_result(rse_loss, current_iter, REASONS.REACH_MAX_ITER)
+                report = self.prepare_report_reuslt(rse_loss, current_iter, REASONS.REACH_MAX_ITER)
+                self.report_result(report)
 
         self.req_adjm.Cancel();self.req_adjm.Free()
         self.req_surv.Cancel();self.req_surv.Free()

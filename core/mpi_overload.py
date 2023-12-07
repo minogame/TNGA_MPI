@@ -24,6 +24,7 @@ class MPI_Overlord():
     ## 4. overlord receive result and report to the individual
 
 
+    ################ UTILS ################
     def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwds) -> None:
         self.kwds = kwds
         self.logger = kwds['logger']
@@ -54,6 +55,8 @@ class MPI_Overlord():
             func(**kwds)
         return
 
+
+    ################ MPI COMMUNICATION ################
     def sync_goal(self):
         goal = self.kwds['experiment']['evoluation_goal']
         self.evoluation_goal = np.load(goal)
@@ -134,19 +137,5 @@ class MPI_Overlord():
 
 
 if __name__ == '__main__':
-    pipeline = Overlord(# GENERATION PROPERTIES
-                        max_generation=30, generation=Generation, random_init=True,
-                        # ISLAND PROPERTIES
-                        N_islands=1, population=[int(sys.argv[2])], 
-                        # INVIDUAL PROPERTIES
-                        size=4, rank=2, out=2, init_sparsity=-0.00001,
-                        # EVALUATION PROPERTIES
-                        evaluate_repeat=2, max_iterations=10000,
-                        fitness_func=[ lambda s,l: s+l*50],
-                        #
-                        # EVOLUTION PROPERTIES
-                        elimiation_threshold=[int(sys.argv[3])], immigration_prob=0, immigration_number=5,
-                        crossover_alpha=1, mutation_prob=0.05,
-                        # FOR COMPUTATION
-                        callbacks=[score_summary])
+    pipeline = Overlord
     pipeline()

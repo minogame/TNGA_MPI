@@ -147,9 +147,9 @@ class Generation(object):
                     fitness_func = self.kwds['fitness_func'][idx]
                 else:
                     fitness_func = self.kwds['fitness_func']
-            else:        
+            else:
                 fitness_func = lambda s, l: s+100*l
-            
+
             total_score = [ fitness_func(s, l) for s, l in zip(sparsity_score, loss_score) ]
 
             island['rank'] = np.argsort(total_score)

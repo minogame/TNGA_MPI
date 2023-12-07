@@ -3,6 +3,8 @@ import numpy as np
 
 class CALLBACKS:
 
+    ### Callbacks are now automately called for each domain
+
     class GENERATION:
 
         @staticmethod
@@ -23,11 +25,11 @@ class CALLBACKS:
     class INDIVIDUAL:
 
         @staticmethod
-        def do_nothing(logger):
+        def do_nothing(*args, **kwds):
             pass
 
     class OVERLOAD:
 
         @staticmethod
-        def do_nothing(logger):
+        def do_nothing(*args, **kwds):
             pass
