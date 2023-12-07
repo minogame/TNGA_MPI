@@ -1,6 +1,7 @@
 import numpy as np
 import random, string, os
 from evolve import EVOLVE_OPS
+from callbacks import CALLBACKS
 
 
 class Individual(object):
@@ -178,6 +179,11 @@ class Generation(object):
                 self.indv_to_collect.remove(indv)
 
     def is_finished(self):
+
+        if self.previous_generation is not None:
+        self.current_generation(**self.kwds)
+        CALLBACKS.GENERATION(generation=self.current_generation)
+    
         if len(self.indv_to_distribute) == 0 and len(self.indv_to_collect) == 0:
             return True
         else:

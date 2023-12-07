@@ -210,10 +210,11 @@ class MPI_Agent(object):
 
                 # timeout
                 else:
-                    # wait until finish
+                    # wait until finish when it is bearable
                     if current_iter / max_iterations > allow_waiting_after_timeout_rate:
                         self.evaluate(step, n_iter)
                     
+                    # shutdown the computation
                     else:
                         report = self.prepare_report_reuslt(rse_loss, current_iter, REASONS.HARD_TIMEOUT)
                         self.report_result(report)

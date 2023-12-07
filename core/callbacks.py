@@ -1,11 +1,31 @@
-from mpi_generation import Generation
+from typing import Any
+# from mpi_generation import Generation
 import numpy as np
 
 class CALLBACKS:
 
-    ### Callbacks are now automately called for each domain
+    ### Callback functions are now automately called for each domain
+
+    class INDIVIDUAL:
+
+        @staticmethod
+        def do_nothing(*args, **kwds):
+            pass
+
+        def __init__(self, *args: Any, **kwds: Any) -> None:
+            logger = kwds.get('kwds', None)
+            for f in dir(self):
+                if not f.startswith('__'):
+                    ff = eval(f'self.{f}')
+                    if logger:
+                        logger.info(f'Calling callback function {ff}')
+                    ff(*args, **kwds)
 
     class GENERATION:
+
+        @staticmethod
+        def do_nothing(*args, **kwds):
+            pass
 
         @staticmethod
         def score_summary(generation: Generation, logger):
@@ -22,14 +42,27 @@ class CALLBACKS:
                         logger.info('{} | {:.3f} | {} | {:.5f} | {}'.format(indv.scope, np.log10(indv.sparsity), [ float('{:0.4f}'.format(l)) for l in indv.repeat_loss ], v['total'][idx], indv.parents))
                         logger.info(indv.adj_matrix)
 
-    class INDIVIDUAL:
+        def __init__(self, *args: Any, **kwds: Any) -> None:
+            logger = kwds.get('kwds', None)
+            for f in dir(self):
+                if not f.startswith('__'):
+                    ff = eval(f'self.{f}')
+                    if logger:
+                        logger.info(f'Calling callback function {ff}')
+                    ff(*args, **kwds)
 
-        @staticmethod
-        def do_nothing(*args, **kwds):
-            pass
 
     class OVERLOAD:
 
         @staticmethod
         def do_nothing(*args, **kwds):
             pass
+
+        def __init__(self, *args: Any, **kwds: Any) -> None:
+            logger = kwds.get('kwds', None)
+            for f in dir(self):
+                if not f.startswith('__'):
+                    ff = eval(f'self.{f}')
+                    if logger:
+                        logger.info(f'Calling callback function {ff}')
+                    ff(*args, **kwds)

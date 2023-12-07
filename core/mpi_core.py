@@ -23,6 +23,9 @@ class REASONS:
 class DUMMYINDV:
     pass
 
+def DUMMYFUNC(*args, **kwds):
+    pass
+
 def init_rdict(c):
     for k, v in c.__dict__.items():
         if not k.startswith('__'):

@@ -23,24 +23,22 @@ agent_behavier:
     allow_waiting_after_timeout_rate: 0.5
 
 generation_property:
-    n_individuals_span: 200
-    n_individuals_survive: 100 
+    island_params:
+        n_islands: 1
+        n_individuals_span: 200
+        n_individuals_survive: 100 
     allow_fewer_repeat_after_timeout: True
-    fitness_func: "lambda s,l: s + l * 50"
+    fitness_func: [FITNESS_FUNCS.defualt]
 
+individual_property:
+    tn_size: 4
+    tn_rank: 2
+    out: 2
+    init_sparsity: -0.00001
 
-    (# GENERATION PROPERTIES
-                        =30, generation=Generation, =True,
-                        # ISLAND PROPERTIES
-                        N_islands=1, population=[int(sys.argv[2])], 
-                        # INVIDUAL PROPERTIES
-                        size=4, rank=2, out=2, init_sparsity=-0.00001,
-                        # EVALUATION PROPERTIES
-                        evaluate_repeat=2, max_iterations=10000,
-                        
-                        #
-                        # EVOLUTION PROPERTIES
-                        elimiation_threshold=[int(sys.argv[3])], immigration_prob=0, immigration_number=5,
-                        crossover_alpha=1, mutation_prob=0.05,
-                        # FOR COMPUTATION
-                        callbacks=[score_summary])
+evolution_property:
+    elimiation_threshold: 0.8
+    immigration_prob: 0
+    immigration_number: 5
+    crossover_alpha: 1
+    mutation_prob: 0.05

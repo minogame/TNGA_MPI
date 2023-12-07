@@ -2,8 +2,8 @@ import time, mpi4py
 import numpy as np
 import functools
 from mpi_generation import Generation, Individual
-from mpi_core import TAGS, REASONS
-
+from mpi_core import TAGS, REASONS, DUMMYFUNC
+from callbacks import CALLBACKS
 
 class MPI_Overlord():
 
@@ -28,34 +28,26 @@ class MPI_Overlord():
     def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwds) -> None:
         self.kwds = kwds
         self.logger = kwds['logger']
+        self.time = 0
 
         # generation
         self.max_generation = kwds['experiment']['max_generation']
-        self.current_generation = None
-        self.previous_generation = None
-        self.N_generation = 0
+        self.collection_of_generations = []
 
-        self.generation = kwds['generation']
-        self.generation_list = []
-
-
+        # agents
         self.available_agents = []
         self.known_agents = {}
-        self.time = 0
-
-        ## trick call with interval
-        self.check_agent_availablity_with_interval = functools.partial(self.call_with_interval, func=self.check_agent_availablity)
 
     def tik(self, sec):
         self.time += sec
         time.sleep(sec)
 
-    def call_with_interval(self, func, interval, **kwds):
+    def call_with_interval(self, func, interval):
         if self.time % interval == 0:
-            func(**kwds)
-        return
-
-
+            return func
+        else:
+            return DUMMYFUNC
+        
     ################ MPI COMMUNICATION ################
     def sync_goal(self):
         goal = self.kwds['experiment']['evoluation_goal']
@@ -100,20 +92,20 @@ class MPI_Overlord():
         self.logger.info(list(self.known_agents.keys()))
 
     def span_generation(self):
-        if self.N_generation > self.max_generation:
-            return False
-        else:
-            if self.current_generation is None:
-                self.current_generation = self.generation(name='generation_init', **self.kwds)
-                self.current_generation.indv_to_distribute = []
+        if not len(self.collection_of_generations):
+            self.collection_of_generations.append(self.generation(name='generation_init', **self.kwds))
+            return True
 
-            if self.current_generation.is_finished():
-                if self.previous_generation is not None:
-                    self.current_generation(**self.kwds)
-                self.N_generation += 1
-                self.previous_generation = self.current_generation
-                self.current_generation = self.generation(self.previous_generation, 
-                                                        name='generation_{:03d}'.format(self.N_generation), **self.kwds)
+        if len(self.collection_of_generations) >= self.max_generation:
+            return False
+        
+        else:
+            ## is_finished now is TOTALLY finished, including evaluation and evolution
+            current_generation = self.collection_of_generations[-1]
+            if current_generation.is_finished():
+                next_generation = self.generation(current_generation,
+                    name=f'generation_{len(self.collection_of_generations)+1:03d}', **self.kwds)
+                self.collection_of_generations.append(next_generation)
 
             return True
 
@@ -124,17 +116,30 @@ class MPI_Overlord():
         ## 3. entering the main generation spanning loop
         ## 4. clean comm and send finish msg to all the agents
 
-        self.req_adjm = self.comm.irecv(source=0, tag=TAGS.DATA_ADJ_MATRIX)
-        self.req_surv = self.comm.irecv(source=0, tag=TAGS.INFO_SURVIVAL)
+    ## 1. survival info
+    ## 2. abnormal when receiving job
+    ## 3. estimation info
+    ## 4. job result report
+
+        self.req_surv = self.comm.irecv(tag=TAGS.INFO_SURVIVAL)
+        self.req_estm = self.comm.irecv(tag=TAGS.INFO_TIME_ESTIMATION)
+        self.req_abnm = self.comm.irecv(tag=TAGS.INFO_ABNORMAL)
+        self.req_rept = self.comm.irecv(tag=TAGS.DATA_RUN_REPORT)
+
         self.sync_goal()
         while self.span_generation():
-            self.call_with_interval(self.__check_available_agent__, 4)
+            self.
+
+
+            self.current_generation.indv_to_distribute = []
+            self.call_with_interval(self.check_available_agent, 4)
             self.call_with_interval(self.__assign_job__, 4)
             self.call_with_interval(self.__collect_result__, 4)
             self.call_with_interval(self.__report_agents__, 180)
             self.call_with_interval(self.__report_generation__, 160)
             self.__tik__(2)
 
+        CALLBACKS.OVERLOAD
 
 if __name__ == '__main__':
     pipeline = Overlord
