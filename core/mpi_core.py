@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 class TAGS:
     __rdict__ = {}
     DATA_ADJ_MATRIX = 0
@@ -19,6 +21,14 @@ class REASONS:
     __rdict__ = {}
     REACH_MAX_ITER = 0
     HARD_TIMEOUT = 1
+
+@dataclass
+class AGENT_STATUS:
+    assigned_job: None
+    estimation_time: None
+    current_iter: None
+    tik_time: 0
+    up_time: 0
 
 class DUMMYINDV:
     pass

@@ -21,10 +21,10 @@ class MPI_Agent(object):
     ## 2. job data 
 
     ################ UTILS ################
-    def __init__(self, comm: mpi4py.MPI.COMM_WORLD, rank: int, **kwargs) -> None:
+    def __init__(self, comm: mpi4py.MPI.COMM_WORLD, **kwargs) -> None:
         self.kwargs = kwargs
         self.comm = comm
-        self.rank = rank
+        self.rank = comm.Get_rank()
         self.time = 0
         self.start_time = time.time()
         self.logger = kwargs['logger']
@@ -59,9 +59,15 @@ class MPI_Agent(object):
                 'max_iter': max_iter
             }
             self.comm.isend(return_dict, dest=0, tag=TAGS.INFO_SURVIVAL)
-            self.logger.info(f'Received survival test singal {SURVIVAL[msg]} from overload, ' \
-                             f'reported tik time {self.time}, real up time {real_up_time},' \
-                             f'current completion rate {current_iter} / {max_iter}.')
+            if self.busy_status:
+                self.logger.info(f'Received survival test singal {SURVIVAL[msg]} from overload, ' \
+                                f'reported tik time {self.time}, real up time {real_up_time},' \
+                                f'current completion rate {current_iter} / {max_iter}.')
+            else:
+                self.logger.info(f'Received survival test singal {SURVIVAL[msg]} from overload, ' \
+                                f'reported tik time {self.time}, real up time {real_up_time},' \
+                                f'not working currently.')
+                
             self.req_surv = self.comm.irecv(tag=1)
         return msg
 

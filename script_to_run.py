@@ -11,13 +11,13 @@ class MPI_Process:
 
     def __init__(self, **kwds) -> None:
         comm = MPI.COMM_WORLD
-        rank = self.comm.Get_rank()
+        rank = comm.Get_rank()
         logger = logging.getLogger(f'logger_rank_{rank}')
 
         if rank == 0:
-            self.noumenon = MPI_Overlord(comm, rank, logger=logger, **kwds)
+            self.noumenon = MPI_Overlord(comm, logger=logger, **kwds)
         else:
-            self.noumenon = MPI_Agent(comm, rank, logger=logger, **kwds)
+            self.noumenon = MPI_Agent(comm, logger=logger, **kwds)
 
     def __call__(self,) -> Any:
         self.noumenon()

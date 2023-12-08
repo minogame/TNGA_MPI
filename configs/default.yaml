@@ -42,3 +42,7 @@ evolution_property:
     immigration_number: 5
     crossover_alpha: 1
     mutation_prob: 0.05
+
+overlord_propert:
+    miminal_tik: 1
+    collect_window: 2

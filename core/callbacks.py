@@ -1,6 +1,7 @@
 from typing import Any
-# from mpi_generation import Generation
+from mpi_generation import Generation
 import numpy as np
+from pprint import pformat
 
 class CALLBACKS:
 
@@ -18,7 +19,7 @@ class CALLBACKS:
                 if not f.startswith('__'):
                     ff = eval(f'self.{f}')
                     if logger:
-                        logger.info(f'Calling callback function {ff}')
+                        logger.info(f'Calling callback function {ff}.')
                     ff(*args, **kwds)
 
     class GENERATION:
@@ -48,7 +49,7 @@ class CALLBACKS:
                 if not f.startswith('__'):
                     ff = eval(f'self.{f}')
                     if logger:
-                        logger.info(f'Calling callback function {ff}')
+                        logger.info(f'Calling callback function {ff}.')
                     ff(*args, **kwds)
 
 

@@ -1,8 +1,8 @@
 import time, mpi4py
 import numpy as np
-import functools
+import functools, itertools
 from mpi_generation import Generation, Individual
-from mpi_core import TAGS, REASONS, DUMMYFUNC
+from mpi_core import TAGS, REASONS, DUMMYFUNC, AGENT_STATUS
 from callbacks import CALLBACKS
 
 class MPI_Overlord():
@@ -29,16 +29,18 @@ class MPI_Overlord():
         self.kwds = kwds
         self.logger = kwds['logger']
         self.time = 0
+        self.comm = comm
+        self.agent_size = self.comm.Get_size() - 1
 
         # generation
         self.max_generation = kwds['experiment']['max_generation']
         self.collection_of_generations = []
 
         # agents
-        self.available_agents = []
-        self.known_agents = {}
+        self.available_agents = dict(
+            itertools.zip_longest(list(range(1, self.agent_size+1)), [], fillvalue=AGENT_STATUS()))
 
-    def tik(self, sec):
+    def tik_and_sleep(self, sec):
         self.time += sec
         time.sleep(sec)
 
@@ -54,23 +56,68 @@ class MPI_Overlord():
         self.evoluation_goal = np.load(goal)
         self.evoluation_goal = self.comm.bcast(self.evoluation_goal, root=0)
 
-    def check_agent_availablity(self):
-        self.available_agents.clear()
-        agents = glob.glob(base_folder+'/agent_pool/*.POOL')
-        agents_id = [ a.split('/')[-1][:-5] for a in agents ]
+    def process_msg_surv(self, msg):
+        rank_surv = msg['rank']
 
-        for aid in list(self.known_agents.keys()):
-            if aid not in agents_id:
-                self.logger.info('Dead agent id = {} found!'.format(aid))
-                self.known_agents.pop(aid, None)
+        self.available_agents[rank_surv].tik_time = msg['time']
+        self.available_agents[rank_surv].up_time = msg['real_up_time']
+        self.available_agents[rank_surv].current_iter = msg['current_iter']
 
-        for aid in agents_id:
-            if aid in self.known_agents.keys():
-                if self.known_agents[aid].is_available():
-                    self.available_agents.append(self.known_agents[aid])
-            else:
-                self.known_agents[aid] = Agent(sge_job_id=aid)
-                self.logger.info('New agent id = {} found!'.format(aid))
+        if msg['busy']:
+            self.logger.info(f'Received survival report from agent rank {rank_surv}, ' \
+                            f'reported tik time {msg["time"]}, real up time {msg["real_up_time"]},' \
+                            f'current completion rate {msg["current_iter"]} / {msg["max_iter"]}.')
+        else:
+            self.logger.info(f'Received survival report from agent rank {rank_surv}, ' \
+                            f'reported tik time {msg["time"]}, real up time {msg["real_up_time"]},' \
+                            f'not working currently.')
+
+
+
+
+    assigned_job: None
+    estimation_time: None
+    current_iter: None
+
+    def call_agent_survivability(self):
+        pass
+
+    def tik_and_collect_everything_from_agent(self, sec):
+        self.time += sec
+        start_time = time.time()
+        while time.time() - start_time < sec:
+
+            status_surv, msg_surv = self.req_surv.test()
+            if status_surv:
+                msg_surv
+
+                collected_queue.append(result)
+                self.agent_state[source] = True
+                print(f'Recv {result} from rank {source}, len(done)={len(collected_queue)}.')
+                req_0 = self.comm.irecv(tag=0)
+
+            status_estm, msg_estm = self.req_estm.test()
+            if status:
+                result, source = msg
+                collected_queue.append(result)
+                print(f'Recv special singal {result} from rank {source}.')
+                req_1 = self.comm.irecv(tag=1)
+
+            status_abnm, msg_abnm = self.req_abnm.test()
+            if status:
+                result, source = msg
+                collected_queue.append(result)
+                print(f'Recv special singal {result} from rank {source}.')
+                req_1 = self.comm.irecv(tag=1)
+
+            status_rept, msg_rept = self.req_rept.test()
+            if status:
+                result, source = msg
+                collected_queue.append(result)
+                print(f'Recv special singal {result} from rank {source}.')
+                req_1 = self.comm.irecv(tag=1)
+
+        return
 
     def __assign_job__(self):
         self.__check_available_agent__()
@@ -113,13 +160,11 @@ class MPI_Overlord():
         ## when the overload is called
         ## 1. initilize 4 mpi recv comm
         ## 2. sync goal with the rank = 0
-        ## 3. entering the main generation spanning loop
+        ## 3. entering the main generation spanning loop,
+        ##    different from the former version,
+        ##    now the overlord only send the messages from agent to generation,
+        ##    the generation will deal with that.
         ## 4. clean comm and send finish msg to all the agents
-
-    ## 1. survival info
-    ## 2. abnormal when receiving job
-    ## 3. estimation info
-    ## 4. job result report
 
         self.req_surv = self.comm.irecv(tag=TAGS.INFO_SURVIVAL)
         self.req_estm = self.comm.irecv(tag=TAGS.INFO_TIME_ESTIMATION)
@@ -129,8 +174,6 @@ class MPI_Overlord():
         self.sync_goal()
         while self.span_generation():
             self.
-
-
             self.current_generation.indv_to_distribute = []
             self.call_with_interval(self.check_available_agent, 4)
             self.call_with_interval(self.__assign_job__, 4)
@@ -139,7 +182,10 @@ class MPI_Overlord():
             self.call_with_interval(self.__report_generation__, 160)
             self.__tik__(2)
 
-        CALLBACKS.OVERLOAD
+        else:
+            CALLBACKS.OVERLOAD()
+
+        self.kwds['overlord_propert']['collect_window']
 
 if __name__ == '__main__':
     pipeline = Overlord
