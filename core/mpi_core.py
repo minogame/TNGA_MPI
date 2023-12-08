@@ -29,6 +29,7 @@ class AGENT_STATUS:
     current_iter: None
     tik_time: 0
     up_time: 0
+    abnormal_counter: 0
 
 class DUMMYINDV:
     pass

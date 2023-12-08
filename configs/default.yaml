@@ -21,6 +21,7 @@ agent_behavier:
     estimation_iter: 100
     timeout: 1800
     allow_waiting_after_timeout_rate: 0.5
+    max_abnormal_before_block: 10
 
 generation_property:
     island_params:
@@ -44,5 +45,4 @@ evolution_property:
     mutation_prob: 0.05
 
 overlord_propert:
-    miminal_tik: 1
-    collect_window: 2
+    tik: 1

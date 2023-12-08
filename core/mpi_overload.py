@@ -2,7 +2,7 @@ import time, mpi4py
 import numpy as np
 import functools, itertools
 from mpi_generation import Generation, Individual
-from mpi_core import TAGS, REASONS, DUMMYFUNC, AGENT_STATUS
+from mpi_core import TAGS, REASONS, DUMMYFUNC, AGENT_STATUS, SURVIVAL
 from callbacks import CALLBACKS
 
 class MPI_Overlord():
@@ -31,6 +31,7 @@ class MPI_Overlord():
         self.time = 0
         self.comm = comm
         self.agent_size = self.comm.Get_size() - 1
+        self.host_status = SURVIVAL.HOST_RUNNING
 
         # generation
         self.max_generation = kwds['experiment']['max_generation']
@@ -72,15 +73,40 @@ class MPI_Overlord():
                             f'reported tik time {msg["time"]}, real up time {msg["real_up_time"]},' \
                             f'not working currently.')
 
+        return
 
+    def process_msg_estm(self, msg):
+        rank_estm = msg['rank']
 
+        self.available_agents[rank_estm].estimation_time = msg['required_time']
 
-    assigned_job: None
-    estimation_time: None
-    current_iter: None
+        self.logger.info(f'Received estimation report from agent rank {rank_estm}, ' \
+                        f'required time is about {msg["required_time"]} with current loss {msg["loss"]}.')
+
+        return
+
+    def process_msg_abnm(self, msg):
+        rank_abnm = msg
+
+        self.available_agents[rank_estm].estimation_time = msg['required_time']
+
+        self.logger.info(f'Received estimation report from agent rank {rank_estm}, ' \
+                        f'required time is about {msg["required_time"]} with current loss {msg["loss"]}.')
+
+        return
+    
+    def broadcast_finish(self):
+        if self.host_status == SURVIVAL.HOST_RUNNING:
+            self.host_status = SURVIVAL.HOST_ABNORMAL_SHUTDOWN
+        self.call_agent_survivability()
+        return
 
     def call_agent_survivability(self):
-        pass
+        for agent in self.available_agents.keys():
+            self.comm.isend(self.host_status, dest=agent, tag=TAGS.INFO_SURVIVAL)
+        return
+
+        
 
     def tik_and_collect_everything_from_agent(self, sec):
         self.time += sec
@@ -89,19 +115,17 @@ class MPI_Overlord():
 
             status_surv, msg_surv = self.req_surv.test()
             if status_surv:
-                msg_surv
-
-                collected_queue.append(result)
-                self.agent_state[source] = True
-                print(f'Recv {result} from rank {source}, len(done)={len(collected_queue)}.')
-                req_0 = self.comm.irecv(tag=0)
+                self.process_msg_surv(msg_surv)
+                self.req_surv = self.comm.irecv(tag=TAGS.INFO_SURVIVAL)
 
             status_estm, msg_estm = self.req_estm.test()
-            if status:
-                result, source = msg
-                collected_queue.append(result)
-                print(f'Recv special singal {result} from rank {source}.')
-                req_1 = self.comm.irecv(tag=1)
+            if status_estm:
+                self.process_msg_surv(msg_estm)
+                self.req_estm = self.comm.irecv(tag=TAGS.INFO_TIME_ESTIMATION)
+
+
+        self.req_abnm = self.comm.irecv(tag=TAGS.INFO_ABNORMAL)
+        self.req_rept = self.comm.irecv(tag=TAGS.DATA_RUN_REPORT)
 
             status_abnm, msg_abnm = self.req_abnm.test()
             if status:
@@ -181,11 +205,17 @@ class MPI_Overlord():
             self.call_with_interval(self.__report_agents__, 180)
             self.call_with_interval(self.__report_generation__, 160)
             self.__tik__(2)
-
         else:
             CALLBACKS.OVERLOAD()
+            self.host_status = SURVIVAL.HOST_NORMAL_FINISHED
+            
 
-        self.kwds['overlord_propert']['collect_window']
+        
+        self.req_estm.Cancel();self.req_estm.Free()
+        self.req_surv.Cancel();self.req_surv.Free()
+        self.req_abnm.Cancel();self.req_abnm.Free()
+        self.req_rept.Cancel();self.req_rept.Free()
+        self.broadcast_finish()
 
 if __name__ == '__main__':
     pipeline = Overlord
