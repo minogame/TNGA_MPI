@@ -34,7 +34,7 @@ generation_property:
 individual_property:
     tn_size: 4
     tn_rank: 2
-    out: 2
+    presented_shape: 2
     init_sparsity: -0.00001
 
 evolution_property:

@@ -4,6 +4,7 @@ import functools, itertools
 from mpi_generation import Generation, Individual
 from mpi_core import TAGS, REASONS, DUMMYFUNC, AGENT_STATUS, SURVIVAL
 from callbacks import CALLBACKS
+from collections import deque
 
 class MPI_Overlord():
 
@@ -38,6 +39,7 @@ class MPI_Overlord():
         self.collection_of_generations = []
 
         # agents
+        self.agent_report_buffer = deque()
         self.available_agents = dict(
             itertools.zip_longest(list(range(1, self.agent_size+1)), [], fillvalue=AGENT_STATUS()))
 
@@ -88,13 +90,31 @@ class MPI_Overlord():
     def process_msg_abnm(self, msg):
         rank_abnm = msg
 
-        self.available_agents[rank_estm].estimation_time = msg['required_time']
+        self.available_agents[rank_abnm].abnormal_counter += 1
 
-        self.logger.info(f'Received estimation report from agent rank {rank_estm}, ' \
-                        f'required time is about {msg["required_time"]} with current loss {msg["loss"]}.')
+        self.logger.info(f'Received abnormal report from agent rank {rank_abnm}, ' \
+                         f'current abnormal count for agent rank {rank_abnm} is ' \
+                         f'{self.available_agents[rank_abnm].abnormal_counter}.')
 
         return
-    
+
+    def process_msg_rept(self, msg):
+
+        ## Lazy process 
+        ## forward the message to a deque
+        ## then ask the generation to process it later
+
+        self.agent_report_buffer.append(msg)
+        rank_rept = msg['rank']
+
+        self.available_agents[rank_rept].assigned_job = None
+        self.available_agents[rank_rept].estimation_time = None
+        self.available_agents[rank_rept].current_iter = None
+
+        self.logger.info(f'Received final report from agent rank {rank_rept} with reason {REASONS[msg["reason"]]}, ' \
+                        f'reported final iteration {msg["current_iter"]}, ' \
+                        f'final loss {msg["loss"]}.')
+
     def broadcast_finish(self):
         if self.host_status == SURVIVAL.HOST_RUNNING:
             self.host_status = SURVIVAL.HOST_ABNORMAL_SHUTDOWN
@@ -107,7 +127,6 @@ class MPI_Overlord():
         return
 
         
-
     def tik_and_collect_everything_from_agent(self, sec):
         self.time += sec
         start_time = time.time()
@@ -123,34 +142,36 @@ class MPI_Overlord():
                 self.process_msg_surv(msg_estm)
                 self.req_estm = self.comm.irecv(tag=TAGS.INFO_TIME_ESTIMATION)
 
-
-        self.req_abnm = self.comm.irecv(tag=TAGS.INFO_ABNORMAL)
-        self.req_rept = self.comm.irecv(tag=TAGS.DATA_RUN_REPORT)
-
             status_abnm, msg_abnm = self.req_abnm.test()
-            if status:
-                result, source = msg
-                collected_queue.append(result)
-                print(f'Recv special singal {result} from rank {source}.')
-                req_1 = self.comm.irecv(tag=1)
+            if status_abnm:
+                self.process_msg_abnm(msg_abnm)
+                self.req_abnm = self.comm.irecv(tag=TAGS.INFO_ABNORMAL)
 
             status_rept, msg_rept = self.req_rept.test()
-            if status:
-                result, source = msg
-                collected_queue.append(result)
-                print(f'Recv special singal {result} from rank {source}.')
-                req_1 = self.comm.irecv(tag=1)
+            if status_rept:
+                self.process_msg_rept(msg_rept)
+                self.req_rept = self.comm.irecv(tag=TAGS.DATA_RUN_REPORT)
 
         return
 
-    def __assign_job__(self):
+    ################ GENERATION OPERATION ################
+    def get_current_generation(self):
+        return self.collection_of_generations[-1]
+
+    def despatch_generation_suggest_agent(self):
+        pass
+
+    def match_and_assign_job_to_agent(self):
         self.__check_available_agent__()
         if len(self.available_agents)>0:
             for agent in self.available_agents:
                 self.current_generation.distribute_indv(agent)
 
-    def __collect_result__(self):
-        self.current_generation.collect_indv()
+    def despatch_generation_collect_result(self):
+        while self.agent_report_buffer:
+            r = self.agent_report_buffer.popleft()
+            self.get_current_generation.collect_indv_report(r)
+        return
 
     def __report_generation__(self):
         self.logger.info('Current length of indv_to_distribute is {}.'.format(len(self.current_generation.indv_to_distribute)))
@@ -204,7 +225,7 @@ class MPI_Overlord():
             self.call_with_interval(self.__collect_result__, 4)
             self.call_with_interval(self.__report_agents__, 180)
             self.call_with_interval(self.__report_generation__, 160)
-            self.__tik__(2)
+            self.tik_and_collect_everything_from_agent(2)
         else:
             CALLBACKS.OVERLOAD()
             self.host_status = SURVIVAL.HOST_NORMAL_FINISHED

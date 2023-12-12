@@ -1,3 +1,4 @@
+from typing import Any, Callable
 import numpy as np
 import random, string, os
 from evolve import EVOLVE_OPS
@@ -6,24 +7,67 @@ from callbacks import CALLBACKS
 
 class Individual(object):
 
+    ## Creation of adj matrix based on function now is method of individual.
+    ## functions now is called by Generation by staticmethod@individual
+
+    @staticmethod
+    def full_connection_adj_matrix(individual):
+        pass
+
+    @staticmethod
+    def naive_random_adj_matrix_with_sparsity_limitation(individual):
+        if isinstance(individual.presented_shape, list):
+            adj_matrix = np.diag(individual.presented_shape)
+        else:
+            adj_matrix = np.diag([individual.presented_shape]*individual.tn_size)
+
+        if individual.init_sparsity < 0:
+            connection = []
+            real_init_sparsity = np.random.uniform(low=-individual.init_sparsity, high=1.0)
+            for i in range(np.sum(np.arange(individual.tn_size))):
+                connection.append(int(np.random.uniform()>real_init_sparsity)*individual.tn_rank)
+        else:
+            connection = [ int(np.random.uniform()>individual.init_sparsity)*individual.tn_rank for i in range(np.sum(np.arange(individual.tn_size)))]
+        adj_matrix[np.triu_indices(individual.tn_size, 1)] = connection
+        return adj_matrix
+
     def __init__(self, adj_matrix=None, scope=None, **kwds):
         super(Individual, self).__init__()
+
+        ## basic propoerties
         if adj_matrix is None:
             self.adj_matrix = kwds['adj_func'](**kwds)
+        elif adj_matrix is Callable:
+            self.adj_matrix = adj_matrix(self)
         else:
             self.adj_matrix = adj_matrix
-        self.scope = scope
-        self.parents = kwds['parents'] if 'parents' in kwds.keys() else None
-        self.repeat = kwds['evaluate_repeat'] if 'evaluate_repeat' in kwds.keys() else 1
-        self.iters = kwds['max_iterations'] if 'max_iterations' in kwds.keys() else 10000
-        self.dim = self.adj_matrix.shape[0]
+
+        
         self.adj_matrix[np.tril_indices(self.dim, -1)] = self.adj_matrix.transpose()[np.tril_indices(self.dim, -1)]
+
+        self.scope = scope
+        self.dim = self.adj_matrix.shape[0]
+
+        ## parse the kwds
+        self.parents = kwds.get('parents', None)
+        self.repeat = kwds.get('evaluate_repeat', 1)
+        self.iters = kwds.get('max_iterations', 10000)
+
+
+        
+        ## adj_matrix_k put all the 0 edge to 1, this is only used for calulation of sparsity
+        ## sparsity is the ratio of actual # elements to its presented # elements
+        ## sparsity_connection is the # connections (compared to full connection)
         adj_matrix_k = np.copy(self.adj_matrix)
         adj_matrix_k[adj_matrix_k==0] = 1
         self.present_elements = np.prod(np.diag(adj_matrix_k))
         self.actual_elements = np.sum([ np.prod(adj_matrix_k[d]) for d in range(self.dim) ])
-        self.sparsity = self.actual_elements/self.present_elements
-        self.sparsity_connection = np.sum(self.adj_matrix[np.triu_indices(self.adj_matrix.shape[0], 1)]>0)
+        self.sparsity = self.actual_elements / self.present_elements
+        self.sparsity_connection = np.sum(self.adj_matrix[np.triu_indices(self.adj_matrix.shape[0], 1)] > 0)
+
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        ## call an individual act
+
 
     def deploy(self, sge_job_id):
         try:
@@ -60,7 +104,7 @@ class Generation(object):
         self.name = name
         self.N_islands = kwds['N_islands'] if 'N_islands' in kwds.keys() else 1
         self.kwds = kwds
-        self.out = self.kwds['out']
+        self.presented_shape = self.kwds['presented_shape']
         self.tn_rank = self.kwds['rank']
         self.tn_size = self.kwds['size']
         self.init_sparsity = kwds['init_sparsity'] if 'init_sparsity' in kwds.keys() else 0.8
@@ -97,22 +141,6 @@ class Generation(object):
             return True
         except Exception as e:
             raise e
-
-    def __random_adj_matrix__(self, **kwds):
-        if isinstance(self.out, list):
-            adj_matrix = np.diag(self.out)
-        else:
-            adj_matrix = np.diag([self.out]*self.tn_size)
-
-        if self.init_sparsity < 0:
-            connection = []
-            real_init_sparsity = np.random.uniform(low=-self.init_sparsity, high=1.0)
-            for i in range(np.sum(np.arange(self.tn_size))):
-                connection.append(int(np.random.uniform()>real_init_sparsity)*self.tn_rank)
-        else:
-            connection = [ int(np.random.uniform()>self.init_sparsity)*self.tn_rank for i in range(np.sum(np.arange(self.tn_size)))]
-        adj_matrix[np.triu_indices(self.tn_size, 1)] = connection
-        return adj_matrix
 
     def __evolve__(self):
         # ELIMINATION

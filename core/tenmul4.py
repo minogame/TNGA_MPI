@@ -2,13 +2,16 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import tensorflow as tf
 tf.compat.v1.disable_eager_execution()
+from tensorflow import Tensor
+
+import random
 from random import choice
 
-import operator 
+import operator
 import numpy as np
 np.set_printoptions(precision=4)
 from functools import reduce
-from tensorflow import Tensor
+
 
 class RealTensor(object):
 
@@ -272,46 +275,57 @@ class TensorNetwork(object):
     def opt_opeartions(self, opt, loss):
         return opt.minimize(loss, var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES))
 
+
+class CaseTest:
+
+    @staticmethod
+    def test_TR_example():
+
+        # An example of TR
+        TR_A = np.array([[ 2,  6,  0,  0,  0,  0,  0],
+                         [ 0,  3,  0,  0,  0,  0,  0],
+                         [ 0,  0,  5,  6,  0,  0,  0],
+                         [ 0,  0,  0,  7,  0,  0,  0],
+                         [ 0,  0,  0,  0, 11,  6,  0],
+                         [ 0,  0,  0,  0,  0, 13,  6],
+                         [ 0,  0,  0,  0,  0,  0, 17] ])
+
+        tr_a = TensorNetwork(TR_A)
+        output_a = tr_a.reduction(False)
+        goal_a = tf.compat.v1.random_normal(shape=output_a.get_shape().as_list(), seed=100)
+        mse_loss = tf.reduce_mean(tf.square(output_a - goal_a))
+
+        step = tr_a.opt_opeartions(tf.compat.v1.train.AdamOptimizer(0.0001), mse_loss)
+        sess = tf.compat.v1.Session()
+        sess.run(tf.compat.v1.global_variables_initializer())
+        for i in range(10000):
+            _, loss = sess.run([step, mse_loss])
+            if (i+1)%100 == 0:
+                print(loss)
+
+    @staticmethod
+    def test_random_TN_example():
+        # An exmple of random tensor network
+        def generate_random_TN(output_shape, num_cores, max_connection, max_dim):
+            matrix = np.diag(output_shape + [0]*(num_cores - len(output_shape)))
+
+            idx = random.choices(np.array(np.triu_indices(num_cores, 1)).transpose(), k=random.randint(2, max_connection))
+            for i in idx:
+                i = tuple(i)
+                print(i)
+                matrix[i] = random.randint(2, max_dim)
+
+            return matrix
+
+        a = generate_random_TN([2,3,5,7], 7, 15, 10)
+
+        print (a)
+
+
 if __name__ == '__main__':
+    pass
 
-    # An example of TR
-    # TR_A = np.array([ [ 2,  6,  0,  0,  0,  0,  0],
-    #                                     [ 0,  3,  0,  0,  0,  0,  0],
-    #                                     [ 0,  0,  5,  6,  0,  0,  0],
-    #                                     [ 0,  0,  0,  7,  0,  0,  0],
-    #                                     [ 0,  0,  0,  0, 11,  6,  0],
-    #                                     [ 0,  0,  0,  0,  0, 13,  6],
-    #                                     [ 0,  0,  0,  0,  0,  0, 17] ])
 
-    # tr_a = TensorNetwork(TR_A)
-    # output_a = tr_a.reduction(False)
-    # goal_a = tf.random_normal(shape=output_a.get_shape().as_list(), seed=100)
-    # mse_loss = tf.reduce_mean(tf.square(output_a - goal_a))
-
-    # step = tr_a.opt_opeartions(tf.train.AdamOptimizer(0.0001), mse_loss)
-
-    # sess = tf.Session()
-    # sess.run(tf.global_variables_initializer())
-    # for i in range(10000):
-    #     _, loss = sess.run([step, mse_loss])
-    #     if (i+1)%100 == 0:
-    #         print(loss)
-
-    # An exmple of random tensor network
-    # def generate_random_TN(output_shape, num_cores, max_connection, max_dim):
-    #     matrix = np.diag(output_shape + [0]*(num_cores - len(output_shape)))
-
-    #     idx = random.choices(np.array(np.triu_indices(num_cores, 1)).transpose(), k=random.randint(2, max_connection))
-    #     for i in idx:
-    #         i = tuple(i)
-    #         print(i)
-    #         matrix[i] = random.randint(2, max_dim)
-
-    #     return matrix
-
-    # a = generate_random_TN([2,3,5,7], 7, 15, 10)
-
-    # print (a)
 
     # CP CP CP
     def generate_CPTucker(output_shape, num_cores, dim):
