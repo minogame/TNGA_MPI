@@ -35,7 +35,7 @@ class CALLBACKS:
             logger.info('===== {} ====='.format(generation.name))
 
             for k, v in generation.societies.items():
-                logger.info('===== ISLAND {} ====='.format(k))
+                logger.info('===== SOCIETY {} ====='.format(k))
 
                 for idx, indv in enumerate(v['indv']):
                     if idx == v['rank'][0]:

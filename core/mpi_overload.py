@@ -190,7 +190,7 @@ class MPI_Overlord():
 
     def span_generation(self):
         if not len(self.collection_of_generations):
-            self.collection_of_generations.append(self.generation(name='generation_init', **self.kwds))
+            self.collection_of_generations.append(Generation(name='generation_init', **self.kwds))
             return True
 
         if len(self.collection_of_generations) >= self.max_generation:
@@ -200,7 +200,7 @@ class MPI_Overlord():
             ## is_finished now is TOTALLY finished, including evaluation and evolution
             current_generation = self.collection_of_generations[-1]
             if current_generation.is_finished():
-                next_generation = self.generation(current_generation,
+                next_generation = Generation(current_generation,
                     name=f'generation_{len(self.collection_of_generations)+1:03d}', **self.kwds)
                 self.collection_of_generations.append(next_generation)
 

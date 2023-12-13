@@ -24,8 +24,8 @@ agent_behavier:
     max_abnormal_before_block: 10
 
 generation_property:
-    island_params:
-        n_islands: 1
+    society_params:
+        n_societies: 1
         n_individuals_span: 200
         n_individuals_survive: 100 
     allow_fewer_repeat_after_timeout: True

@@ -3,7 +3,7 @@ import numpy as np
 import random, string, os
 from evolve import EVOLVE_OPS
 from callbacks import CALLBACKS
-from mpi_core import REASONS
+from mpi_core import REASONS, INDIVIDUAL_STATUS
 import itertools
 
 
@@ -119,6 +119,8 @@ class Individual(object):
 
 class Generation(object):
 
+    def init_
+
     def __init__(self, pG=None, name=None, **kwds):
         super(Generation, self).__init__()
         self.name = name
@@ -126,9 +128,7 @@ class Generation(object):
         self.N_islands = kwds['N_islands'] if 'N_islands' in kwds.keys() else 1
         self.indv_to_collect = []
         self.indv_to_distribute = []
-        self.available_agents = dict(
-            itertools.zip_longest(list(range(1, self.agent_size+1)), [], fillvalue=AGENT_STATUS()))
-
+        
         if pG is not None:
             self.societies = {}
             for k, v in pG.societies.items():
@@ -149,6 +149,10 @@ class Generation(object):
                         adj_func=Individual.naive_random_adj_matrix_with_sparsity_limitation) \
                         for i in range(self.kwds['population'][n]) ]
                 self.indv_to_distribute += [indv for indv in self.societies[society_name]['indv']]
+
+
+        self.available_agents = dict(
+            itertools.zip_longest(list(range(1, self.agent_size+1)), [], fillvalue=INDIVIDUAL_STATUS()))
 
 
     def evolve(self):
@@ -173,10 +177,10 @@ class Generation(object):
                 for indv in v['indv']:
                     EVOLVE_OPS.mutation(indv, self.kwds['mutation_prob'])
 
-    def __evaluate__(self):
+    def evaluate(self):
 
-        def score2rank(island, idx):
-            score = island['score']
+        def score2rank(society, idx):
+            score = society['score']
             sparsity_score = [ s for s, _ in score ]
             loss_score = [ l for _, l in score ]
 
@@ -190,8 +194,8 @@ class Generation(object):
 
             total_score = [ fitness_func(s, l) for s, l in zip(sparsity_score, loss_score) ]
 
-            island['rank'] = np.argsort(total_score)
-            island['total'] = total_score
+            society['rank'] = np.argsort(total_score)
+            society['total'] = total_score
 
         # RANKING
         for idx, (k, v) in enumerate(self.societies.items()):
@@ -217,7 +221,7 @@ class Generation(object):
 
     def is_finished(self):
 
-        if self.previous_generation is not None:
+        # if self.previous_generation is not None:
         self.current_generation(**self.kwds)
         CALLBACKS.GENERATION(generation=self.current_generation)
     
@@ -235,11 +239,11 @@ class Generation(object):
         ## otherwise it acts as asked.
 
         try:
-            self.__evaluate__()
+            self.evaluate()
             if 'callbacks' in kwds.keys():
                 for c in kwds['callbacks']:
                     c(self)
-            self.__evolve__()
+            self.evolve()
             return True
         except Exception as e:
             raise e

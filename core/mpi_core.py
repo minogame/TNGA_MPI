@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 class TAGS:
     __rdict__ = {}
@@ -25,18 +26,40 @@ class REASONS:
 
 @dataclass
 class AGENT_STATUS:
-    assigned_job: None
-    estimation_time: None
-    current_iter: None
-    tik_time: 0
-    up_time: 0
-    abnormal_counter: 0
+    assigned_job: Any = None
+    estimation_time: float = None
+    current_iter: int = None
+    tik_time: int = 0
+    up_time: float = 0
+    abnormal_counter: int = 0
+
+@dataclass
+class SOCIETY:
+    name: None
+    individuals: list[Any] = []
+    score_original: list[Any] = []
+    score_total: list[Any] = []
+    indv_ranking: list[Any] = []
+
+    def __iter__(self):
+        for i in self.individuals:
+            yield i.scope, i
+
+    def __len__(self):
+        return len(self.individuals)
 
 @dataclass
 class INDIVIDUAL_STATUS:
-    individual: None
-    assigned: False
-    repeated: 0
+    individual: Any = None
+    assigned: list[int] = []
+    repeated: int = 0
+
+    def __str__(self) -> str:
+        if self.assigned:
+            t = f'Individual {self.individual.scope} has been repeated {self.repeated} times,' \
+                f'it is currently been assign in agent rank = {self.assigned}.'
+            
+        return t
 
 class DUMMYINDV:
     pass
