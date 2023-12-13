@@ -21,6 +21,7 @@ class REASONS:
     __rdict__ = {}
     REACH_MAX_ITER = 0
     HARD_TIMEOUT = 1
+    FAKE_RESULT = 2
 
 @dataclass
 class AGENT_STATUS:
@@ -30,6 +31,12 @@ class AGENT_STATUS:
     tik_time: 0
     up_time: 0
     abnormal_counter: 0
+
+@dataclass
+class INDIVIDUAL_STATUS:
+    individual: None
+    assigned: False
+    repeated: 0
 
 class DUMMYINDV:
     pass
@@ -44,5 +51,5 @@ def init_rdict(c):
 
 init_rdict(TAGS)
 init_rdict(REASONS)
-
+init_rdict(SURVIVAL)
 

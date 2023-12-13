@@ -32,6 +32,7 @@ generation_property:
     fitness_func: [FITNESS_FUNCS.defualt]
 
 individual_property:
+    discard_hard_timeout_result: False
     random_initilization_property:
         tn_size: 4
         tn_rank: 2

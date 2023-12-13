@@ -3,6 +3,8 @@ import numpy as np
 import random, string, os
 from evolve import EVOLVE_OPS
 from callbacks import CALLBACKS
+from mpi_core import REASONS
+import itertools
 
 
 class Individual(object):
@@ -54,10 +56,13 @@ class Individual(object):
         self.scope = scope # this is also the "name" of the individual
         self.dim = self.adj_matrix.shape[0]
         self.repeat_loss = []
+        self.repeat_loss_iter = []
+        self.repeat_loss_reason = []
 
         ## parse the kwds
         self.parents = kwds.get('parents', None)
         self.individual_property = kwds.get('individual_property', {})
+        self.discard_hard_timeout_result = self.individual_property.get('discard_hard_timeout_result', False)
         self.random_initilization_property = self.individual_property.get('random_initilization_property', {})
 
         ## for random initilization
@@ -84,60 +89,46 @@ class Individual(object):
         ## 2. collect: overlord report the repeat_loss to generation, 
         ##             generation forward this loss to individual,
         ##             individual process if the loss (discard of keep) then append it to repeat loss.
+        ## 3. assign: overlord report problem of this individual, 
+        ##            therefore generation provide a fake result for it
 
         if action == 'deploy':
             return dict(adj_matrix=self.adj_matrix, scope=self.scope)
         
         elif action == 'collect':
             reported_result = kwds.get('reported_result', None)
-            pass
-        else:
-            pass
-
-        return
-
-
-    def deploy(self, sge_job_id):
-        try:
-            path = base_folder+'/job_pool/{}.npz'.format(sge_job_id)
-            np.savez(path, adj_matrix=self.adj_matrix, scope=self.scope, repeat=self.repeat, iters=self.iters)
-            self.sge_job_id = sge_job_id
-            return True
-        except Exception as e:
-            raise e
-
-    def collect(self, fake_loss=False):
-        if not fake_loss:
-            try:
-                path = base_folder+'/result_pool/{}.npz'.format(self.scope.replace('/', '_'))
-                result = np.load(path)
-                self.repeat_loss = result['repeat_loss']
-                os.remove(path)
+            if reported_result:
+                if self.discard_hard_timeout_result and reported_result['reason'] == REASONS.HARD_TIMEOUT:
+                    pass
+                else:
+                    self.repeat_loss.append(reported_result['loss'])
+                    self.repeat_loss_iter.append(reported_result['current_iter'])
+                    self.repeat_loss_reason.append(reported_result['reason'])
                 return True
-            except Exception:
+            else:
                 return False
+
+        elif action == 'assign':
+            self.repeat_loss.append(kwds.get('loss', 1e9))
+            self.repeat_loss_iter.append(-1)
+            self.repeat_loss_reason.append(REASONS.FAKE_RESULT)
+            return True
         else:
-            self.repeat_loss = [9999]*self.repeat
-            return True      
+            return
+  
 
 class Generation(object):
-
-    ## When generation is called:
-    ## 1. check is_finished.
-    ## 2. if finished, do evaluate and evolve, then report.
-    ## 3. if not finished, report the schedule table.
 
     def __init__(self, pG=None, name=None, **kwds):
         super(Generation, self).__init__()
         self.name = name
-        self.N_islands = kwds['N_islands'] if 'N_islands' in kwds.keys() else 1
         self.kwds = kwds
-        self.presented_shape = self.kwds['presented_shape']
-        self.tn_rank = self.kwds['rank']
-        self.tn_size = self.kwds['size']
-        self.init_sparsity = kwds['init_sparsity'] if 'init_sparsity' in kwds.keys() else 0.8
+        self.N_islands = kwds['N_islands'] if 'N_islands' in kwds.keys() else 1
         self.indv_to_collect = []
         self.indv_to_distribute = []
+        self.available_agents = dict(
+            itertools.zip_longest(list(range(1, self.agent_size+1)), [], fillvalue=AGENT_STATUS()))
+
         if pG is not None:
             self.societies = {}
             for k, v in pG.societies.items():
@@ -151,26 +142,16 @@ class Generation(object):
         elif 'random_init' in kwds.keys():
             self.societies = {}
             for n in range(self.kwds['N_islands']):
-                society_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+                society_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5)) + f'{n}'
                 self.societies[society_name] = {}
                 self.societies[society_name]['indv'] = [ \
                         Individual(scope='{}/{}/{:03d}'.format(self.name, society_name, i), 
-                        adj_func=self.__random_adj_matrix__, **self.kwds) \
+                        adj_func=Individual.naive_random_adj_matrix_with_sparsity_limitation) \
                         for i in range(self.kwds['population'][n]) ]
                 self.indv_to_distribute += [indv for indv in self.societies[society_name]['indv']]
 
-    def __call__(self, **kwds):
-        try:
-            self.__evaluate__()
-            if 'callbacks' in kwds.keys():
-                for c in kwds['callbacks']:
-                    c(self)
-            self.__evolve__()
-            return True
-        except Exception as e:
-            raise e
 
-    def __evolve__(self):
+    def evolve(self):
         # ELIMINATION
         if 'elimiation_threshold' in self.kwds:
             for idx, (k, v) in enumerate(self.societies.items()):
@@ -244,3 +225,21 @@ class Generation(object):
             return True
         else:
             return False
+
+    def __call__(self, action, *args, **kwds):
+
+        ## When generation is called:
+        ## 1. check is_finished.
+        ## 2. if finished, do evaluate and evolve, then report.
+        ## 3. if not finished, report the schedule table.
+        ## otherwise it acts as asked.
+
+        try:
+            self.__evaluate__()
+            if 'callbacks' in kwds.keys():
+                for c in kwds['callbacks']:
+                    c(self)
+            self.__evolve__()
+            return True
+        except Exception as e:
+            raise e
