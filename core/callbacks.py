@@ -6,6 +6,8 @@ from pprint import pformat
 class CALLBACKS:
 
     ### Callback functions are now automately called for each domain
+    ### Callbacks are not called by initilization function,
+    ### which calls all methods that defined (including do_nothing)
 
     class INDIVIDUAL:
 

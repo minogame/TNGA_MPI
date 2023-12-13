@@ -12,7 +12,14 @@ class Individual(object):
 
     @staticmethod
     def full_connection_adj_matrix(individual):
-        pass
+        if isinstance(individual.presented_shape, list):
+            adj_matrix = np.diag(individual.presented_shape)
+        else:
+            adj_matrix = np.diag([individual.presented_shape]*individual.tn_size)
+
+        adj_matrix[np.triu_indices(individual.tn_size, 1)] = individual.tn_rank
+
+        return adj_matrix
 
     @staticmethod
     def naive_random_adj_matrix_with_sparsity_limitation(individual):
@@ -24,10 +31,10 @@ class Individual(object):
         if individual.init_sparsity < 0:
             connection = []
             real_init_sparsity = np.random.uniform(low=-individual.init_sparsity, high=1.0)
-            for i in range(np.sum(np.arange(individual.tn_size))):
+            for _ in range(np.sum(np.arange(individual.tn_size))):
                 connection.append(int(np.random.uniform()>real_init_sparsity)*individual.tn_rank)
         else:
-            connection = [ int(np.random.uniform()>individual.init_sparsity)*individual.tn_rank for i in range(np.sum(np.arange(individual.tn_size)))]
+            connection = [ int(np.random.uniform()>individual.init_sparsity)*individual.tn_rank for _ in range(np.sum(np.arange(individual.tn_size)))]
         adj_matrix[np.triu_indices(individual.tn_size, 1)] = connection
         return adj_matrix
 
@@ -42,19 +49,23 @@ class Individual(object):
         else:
             self.adj_matrix = adj_matrix
 
-        
         self.adj_matrix[np.tril_indices(self.dim, -1)] = self.adj_matrix.transpose()[np.tril_indices(self.dim, -1)]
 
-        self.scope = scope
+        self.scope = scope # this is also the "name" of the individual
         self.dim = self.adj_matrix.shape[0]
+        self.repeat_loss = []
 
         ## parse the kwds
         self.parents = kwds.get('parents', None)
-        self.repeat = kwds.get('evaluate_repeat', 1)
-        self.iters = kwds.get('max_iterations', 10000)
+        self.individual_property = kwds.get('individual_property', {})
+        self.random_initilization_property = self.individual_property.get('random_initilization_property', {})
 
+        ## for random initilization
+        self.tn_size = self.random_initilization_property.get('tn_size', 4)
+        self.tn_rank = self.random_initilization_property.get('tn_rank', 2)
+        self.presented_shape = self.random_initilization_property.get('presented_shape', 2)
+        self.init_sparsity = self.random_initilization_property.get('init_sparsity', -0.00001) 
 
-        
         ## adj_matrix_k put all the 0 edge to 1, this is only used for calulation of sparsity
         ## sparsity is the ratio of actual # elements to its presented # elements
         ## sparsity_connection is the # connections (compared to full connection)
@@ -65,8 +76,25 @@ class Individual(object):
         self.sparsity = self.actual_elements / self.present_elements
         self.sparsity_connection = np.sum(self.adj_matrix[np.triu_indices(self.adj_matrix.shape[0], 1)] > 0)
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        ## call an individual act
+    def __call__(self, action=None, *args: Any, **kwds: Any) -> Any:
+        ## call an individual act as follows
+        ## 1. depoly: report its adj_matrix to generation, 
+        ##            generation will then forward it to overlord,
+        ##            individual then tracks the rank it passed to.
+        ## 2. collect: overlord report the repeat_loss to generation, 
+        ##             generation forward this loss to individual,
+        ##             individual process if the loss (discard of keep) then append it to repeat loss.
+
+        if action == 'deploy':
+            return dict(adj_matrix=self.adj_matrix, scope=self.scope)
+        
+        elif action == 'collect':
+            reported_result = kwds.get('reported_result', None)
+            pass
+        else:
+            pass
+
+        return
 
 
     def deploy(self, sge_job_id):

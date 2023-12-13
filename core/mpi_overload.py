@@ -116,6 +116,9 @@ class MPI_Overlord():
                         f'final loss {msg["loss"]}.')
 
     def broadcast_finish(self):
+        ## by default the while loop will change the status to normal shutdown
+        ## therefore once the while loop is broken, should change it to abnormal
+ 
         if self.host_status == SURVIVAL.HOST_RUNNING:
             self.host_status = SURVIVAL.HOST_ABNORMAL_SHUTDOWN
         self.call_agent_survivability()
@@ -128,6 +131,8 @@ class MPI_Overlord():
 
         
     def tik_and_collect_everything_from_agent(self, sec):
+        ## The tik function is a while loop checking the irecv status
+
         self.time += sec
         start_time = time.time()
         while time.time() - start_time < sec:

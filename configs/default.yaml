@@ -32,10 +32,11 @@ generation_property:
     fitness_func: [FITNESS_FUNCS.defualt]
 
 individual_property:
-    tn_size: 4
-    tn_rank: 2
-    presented_shape: 2
-    init_sparsity: -0.00001
+    random_initilization_property:
+        tn_size: 4
+        tn_rank: 2
+        presented_shape: 2
+        init_sparsity: -0.00001
 
 evolution_property:
     elimiation_threshold: 0.8

@@ -322,12 +322,8 @@ class CaseTest:
         print (a)
 
 
-if __name__ == '__main__':
-    pass
-
-
-
     # CP CP CP
+    @staticmethod
     def generate_CPTucker(output_shape, num_cores, dim):
         if isinstance(output_shape, list):
             output_shape = [0] + output_shape
@@ -343,135 +339,140 @@ if __name__ == '__main__':
         matrix[0] = dim
 
         return matrix
+    
+    @staticmethod
+    def test_cp():
+        from scipy.io import loadmat
+        cp = loadmat('data_CP.mat')
+        U, X = cp['U'][0], cp['X'][0]
 
-    # cp = loadmat('data_CP.mat')
-    # U, X = cp['U'][0], cp['X'][0]
+        sess = tf.Session()
+        for i in range(48):
+            ground_turth = X[i]
 
-    # sess = tf.Session()
-    # for i in range(48):
-    #     ground_turth = X[i]
+            num_cores = U[i].shape[1]
+            output_shape = U[i][0][0].shape[0]
+            dim = U[i][0][0].shape[1]
 
-    #     num_cores = U[i].shape[1]
-    #     output_shape = U[i][0][0].shape[0]
-    #     dim = U[i][0][0].shape[1]
+            adj_matrix = CaseTest.generate_CPTucker(output_shape, num_cores, dim)
 
-    #     adj_matrix = generate_CPTucker(output_shape, num_cores, dim)
+            cp_diag = np.zeros([dim]*num_cores, dtype=np.float32)
+            np.fill_diagonal(cp_diag, 1)
 
-    #     cp_diag = np.zeros([dim]*num_cores, dtype=np.float32)
-    #     np.fill_diagonal(cp_diag, 1)
+            # init_np = [cp_diag] + [ np.array(U[i][0][n]).transpose() for n in range(num_cores)]
+            # init_tf = [ tf.convert_to_tensor(i) for i in init_np ]
 
-    #     # init_np = [cp_diag] + [ np.array(U[i][0][n]).transpose() for n in range(num_cores)]
-    #     # init_tf = [ tf.convert_to_tensor(i) for i in init_np ]
+            init_tf = [ tf.convert_to_tensor(cp_diag) ] + [tf.random_normal_initializer(mean=0.0, stddev=0.1)]*num_cores
 
-    #     init_tf = [ tf.convert_to_tensor(cp_diag) ] + [tf.random_normal_initializer(mean=0.0, stddev=0.1)]*num_cores
+            tn = TensorNetwork(adj_matrix, initializer_list=init_tf, scope='TensorNetwork_{}'.format(i),
+                                                                            trainable_list = [False] + [True] * num_cores)
 
-    #     tn = TensorNetwork(adj_matrix, initializer_list=init_tf, scope='TensorNetwork_{}'.format(i),
-    #                                                                     trainable_list = [False] + [True] * num_cores)
+            output = tn.reduction(False)        
 
-    #     output = tn.reduction(False)        
+            gt = tf.convert_to_tensor(ground_turth)
+            mse_loss = tf.losses.mean_squared_error(gt, output)
+            step = tn.opt_opeartions(tf.train.AdamOptimizer(0.001), mse_loss)
 
-    #     gt = tf.convert_to_tensor(ground_turth)
-    #     mse_loss = tf.losses.mean_squared_error(gt, output)
-    #     step = tn.opt_opeartions(tf.train.AdamOptimizer(0.001), mse_loss)
+            sess.run(tf.global_variables_initializer())
+            for i in range(100000):
+                _, loss = sess.run([step, mse_loss])
+                if loss < 1e-7:
+                    break
 
-    #     sess.run(tf.global_variables_initializer())
-    #     for i in range(100000):
-    #         _, loss = sess.run([step, mse_loss])
-    #         if loss < 1e-7:
-    #             break
+            print (i, loss)
+            o = sess.run(output)
+            diff = np.mean(np.square(ground_turth - o))
+            print (diff)
+            print (o)
+            print (ground_turth)
+            print (adj_matrix)
 
-    #     print (i, loss)
+    @staticmethod
+    def test_tucker():
+        # Tucker Tucker
+        from scipy.io import loadmat
+        tucker = loadmat('data_Tucker.mat')
+        G, U, X = tucker['G'][0], tucker['U'][0], tucker['X'][0]
 
-        # o = sess.run(output)
+        sess = tf.Session()
+        for i in range(22,23):
+            ground_turth = X[i]
 
-        # diff = np.mean(np.square(ground_turth - o))
+            num_cores = U[i].shape[1]
+            output_shape = U[i][0][0].shape[0]
+            dim = U[i][0][0].shape[1]
 
-        # print (diff)
+            adj_matrix = CaseTest.generate_CPTucker(output_shape, num_cores, dim)
+            # print (adj_matrix)
 
-        # print (o)
-        # print (ground_turth)
+            init_np = [G[i]] + [ np.array(U[i][0][n]).transpose() for n in range(num_cores)]
+            init_tf = [ tf.convert_to_tensor(i) for i in init_np ]
 
-        # print (adj_matrix)
+            # init_tf = [tf.random_normal_initializer(mean=0.0, stddev=0.1)]*(num_cores+1)
 
-    # Tucker Tucker
-    # tucker = loadmat('data_Tucker.mat')
-    # G, U, X = tucker['G'][0], tucker['U'][0], tucker['X'][0]
-
-    # sess = tf.Session()
-    # for i in range(22,23):
-    #     ground_turth = X[i]
-
-    #     num_cores = U[i].shape[1]
-    #     output_shape = U[i][0][0].shape[0]
-    #     dim = U[i][0][0].shape[1]
-
-    #     adj_matrix = generate_CPTucker(output_shape, num_cores, dim)
-    #     # print (adj_matrix)
-
-    #     init_np = [G[i]] + [ np.array(U[i][0][n]).transpose() for n in range(num_cores)]
-    #     init_tf = [ tf.convert_to_tensor(i) for i in init_np ]
-
-
-    #     # init_tf = [tf.random_normal_initializer(mean=0.0, stddev=0.1)]*(num_cores+1)
-
-    #     # tn = TensorNetwork(adj_matrix, initializer_list=init_tf, scope='TensorNetwork_{}'.format(i),
-    #     #                                                                 trainable_list = [True]*(num_cores+1))
-
-
-    #     tn = TensorNetwork(adj_matrix, initializer_list=init_tf, scope='TensorNetwork_{}'.format(i))
-
-    #     output = tn.reduction(False)        
-
-    #     gt = tf.convert_to_tensor(ground_turth)
-    #     mse_loss = tf.losses.mean_squared_error(gt, output)
-    #     step = tn.opt_opeartions(tf.train.AdamOptimizer(0.001), mse_loss)
-
-    #     sess.run(tf.global_variables_initializer())
-    #     # for i in range(10000):
-    #     #     _, loss = sess.run([step, mse_loss])
-    #     #     if loss < 1e-7:
-    #     #         break
-
-    #     # print (i, loss)
-
-    #     o = sess.run(output)
-    #     diff = np.mean(np.square(ground_turth - o))
-
-    #     print (diff)
-
-        # from itertools import permutations
-
-        # for idx in permutations(range(3)):
-        #     o = np.transpose(o, idx)
-
-        #     diff = np.mean(np.square(ground_turth - o))
-
-        #     print (diff)
+            # tn = TensorNetwork(adj_matrix, initializer_list=init_tf, scope='TensorNetwork_{}'.format(i),
+            #                                                                 trainable_list = [True]*(num_cores+1))
 
 
-    # OUTTER PRODUCT
+            tn = TensorNetwork(adj_matrix, initializer_list=init_tf, scope='TensorNetwork_{}'.format(i))
 
-    # outter = loadmat('rank1.mat')
-    # U, X = outter['U'][0], outter['X'][0]
+            output = tn.reduction(False)        
 
-    # sess = tf.Session()
-    # for i in range(9):
-    #     ground_turth = X[i]
-    #     num_cores = len(X[i].shape)
+            gt = tf.convert_to_tensor(ground_turth)
+            mse_loss = tf.losses.mean_squared_error(gt, output)
+            step = tn.opt_opeartions(tf.train.AdamOptimizer(0.001), mse_loss)
 
-    #     adj_matrix = np.diag(X[i].shape)
+            sess.run(tf.global_variables_initializer())
+            # for i in range(10000):
+            #     _, loss = sess.run([step, mse_loss])
+            #     if loss < 1e-7:
+            #         break
 
-    #     init_np = [ np.squeeze(np.array(U[i][0][n])) for n in range(num_cores)]
-    #     init_tf = [ tf.convert_to_tensor(i) for i in init_np ]
+            # print (i, loss)
 
-    #     tn = TensorNetwork(adj_matrix, initializer_list=init_tf, scope='TensorNetwork_{}'.format(i))
-    #     output = tn.reduction(True)
-    #     sess.run(tf.global_variables_initializer())
-    #     o = sess.run(output)
+            o = sess.run(output)
+            diff = np.mean(np.square(ground_turth - o))
 
-    #     diff = np.mean(np.square(ground_turth - o))
+            print (diff)
 
-    #     print (diff)
+            from itertools import permutations
+
+            for idx in permutations(range(3)):
+                o = np.transpose(o, idx)
+
+                diff = np.mean(np.square(ground_turth - o))
+
+                print (diff)
+
+    @staticmethod
+    def test_outter_product():
+        # OUTTER PRODUCT
+        from scipy.io import loadmat
+        outter = loadmat('rank1.mat')
+        U, X = outter['U'][0], outter['X'][0]
+
+        sess = tf.Session()
+        for i in range(9):
+            ground_turth = X[i]
+            num_cores = len(X[i].shape)
+
+            adj_matrix = np.diag(X[i].shape)
+
+            init_np = [ np.squeeze(np.array(U[i][0][n])) for n in range(num_cores)]
+            init_tf = [ tf.convert_to_tensor(i) for i in init_np ]
+
+            tn = TensorNetwork(adj_matrix, initializer_list=init_tf, scope='TensorNetwork_{}'.format(i))
+            output = tn.reduction(True)
+            sess.run(tf.global_variables_initializer())
+            o = sess.run(output)
+
+            diff = np.mean(np.square(ground_turth - o))
+
+            print (diff)
+
+
+if __name__ == '__main__':
+    pass
 
     sess = tf.compat.v1.Session()
     adjm = np.array([[0,2,2,2,2,0,0,0,0],
