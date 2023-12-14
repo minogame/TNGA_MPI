@@ -2,12 +2,13 @@ from typing import Any, Callable
 import numpy as np
 import random, string, os
 from evolve import EVOLVE_OPS
-from callbacks import CALLBACKS
+from callbacks import CALLBACKS, LOG_FORMATER
 from mpi_core import REASONS, INDIVIDUAL_STATUS
 import itertools
+from dataclasses import dataclass
 
 
-class Individual(object):
+class Individual:
 
     ## Creation of adj matrix based on function now is method of individual.
     ## functions now is called by Generation by staticmethod@individual
@@ -41,8 +42,6 @@ class Individual(object):
         return adj_matrix
 
     def __init__(self, adj_matrix=None, scope=None, **kwds):
-        super(Individual, self).__init__()
-
         ## basic propoerties
         if adj_matrix is None:
             self.adj_matrix = kwds['adj_func'](**kwds)
@@ -58,6 +57,8 @@ class Individual(object):
         self.repeat_loss = []
         self.repeat_loss_iter = []
         self.repeat_loss_reason = []
+        self.total_score = None
+        self.status = INDIVIDUAL_STATUS() # the running status
 
         ## parse the kwds
         self.parents = kwds.get('parents', None)
@@ -80,6 +81,24 @@ class Individual(object):
         self.actual_elements = np.sum([ np.prod(adj_matrix_k[d]) for d in range(self.dim) ])
         self.sparsity = self.actual_elements / self.present_elements
         self.sparsity_connection = np.sum(self.adj_matrix[np.triu_indices(self.adj_matrix.shape[0], 1)] > 0)
+
+    def __str__(self) -> str:
+        opt_str = ''
+        if self.status.finished:
+            opt_str += f'{self.scope}: ' \
+                       f'sparsity = {self.sparsity:.3f}, ' \
+                       f'repeat_loss = {[ float("{:0.4f}".format(l)) for l in self.repeat_loss ]}, ' \
+                       f'total_score = {self.total_score:.5f}, ' \
+                       f'parents = {self.parents}.\n' 
+            opt_str += str(self.adj_matrix)
+            opt_str += '\n'
+        else:
+            opt_str = str(self.status)
+        return opt_str
+
+    def cal_total_score(self, fitness_func):
+        self.total_score = fitness_func(self.sparsity, np.min(self.repeat_loss))
+        return
 
     def __call__(self, action=None, *args: Any, **kwds: Any) -> Any:
         ## call an individual act as follows
@@ -117,19 +136,40 @@ class Individual(object):
             return
   
 
-class Generation(object):
+class Generation:
 
-    def init_
+    @dataclass
+    class SOCIETY:
+        name: None
+        individuals: list[Any] = []
+        score_original: list[Any] = []
+        score_total: list[Any] = []
+        indv_ranking: list[Any] = []
+        finished: bool = False
 
-    def __init__(self, pG=None, name=None, **kwds):
-        super(Generation, self).__init__()
-        self.name = name
-        self.kwds = kwds
-        self.N_islands = kwds['N_islands'] if 'N_islands' in kwds.keys() else 1
-        self.indv_to_collect = []
-        self.indv_to_distribute = []
+        def __iter__(self):
+            for i in self.individuals:
+                yield i.scope, i
+
+        def __len__(self):
+            return len(self.individuals)
         
-        if pG is not None:
+        def __str__(self):
+            opt_str = 'In society'
+            if self.finished:
+                for idx, indv in enumerate(self.individuals):
+                    if idx == self.indv_ranking[0]: ## the best individual
+                        opt_str += LOG_FORMATER.RED_F.format(content=str(indv))
+                    else:
+                        opt_str += LOG_FORMATER.BLUE_F.format(content=str(indv))
+            else:
+            self.logger.info('.format(len(self.current_generation.indv_to_distribute)))
+            self.logger.info(''.format(len(self.current_generation.indv_to_collect)))
+            self.logger.info([(indv.scope, indv.sge_job_id) for indv in self.current_generation.indv_to_collect])
+
+
+    def init_societies_individuals(self, pG=None):
+        if pG:
             self.societies = {}
             for k, v in pG.societies.items():
                 self.societies[k] = {}
@@ -139,7 +179,7 @@ class Generation(object):
                         for idx, indv in enumerate(v['indv']) ]
                 self.indv_to_distribute += [indv for indv in self.societies[k]['indv']]
 
-        elif 'random_init' in kwds.keys():
+        else:
             self.societies = {}
             for n in range(self.kwds['N_islands']):
                 society_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5)) + f'{n}'
@@ -150,10 +190,18 @@ class Generation(object):
                         for i in range(self.kwds['population'][n]) ]
                 self.indv_to_distribute += [indv for indv in self.societies[society_name]['indv']]
 
-
         self.available_agents = dict(
             itertools.zip_longest(list(range(1, self.agent_size+1)), [], fillvalue=INDIVIDUAL_STATUS()))
 
+    def __init__(self, pG=None, name=None, **kwds):
+        ## basic propoerties
+        self.name = name
+
+        ## parse the kwds
+        self.kwds = kwds
+        self.N_islands = kwds['N_islands'] if 'N_islands' in kwds.keys() else 1
+
+        
 
     def evolve(self):
         # ELIMINATION
@@ -191,7 +239,6 @@ class Generation(object):
                     fitness_func = self.kwds['fitness_func']
             else:
                 fitness_func = lambda s, l: s+100*l
-
             total_score = [ fitness_func(s, l) for s, l in zip(sparsity_score, loss_score) ]
 
             society['rank'] = np.argsort(total_score)
@@ -199,7 +246,7 @@ class Generation(object):
 
         # RANKING
         for idx, (k, v) in enumerate(self.societies.items()):
-            v['score'] = [ (indv.sparsity ,np.min(indv.repeat_loss)) for indv in v['indv'] ]
+            # v['score'] = [ (indv.sparsity ,np.min(indv.repeat_loss)) for indv in v['indv'] ]
             score2rank(v, idx)
 
     def distribute_indv(self, agent):
@@ -219,6 +266,12 @@ class Generation(object):
                 self.logger.info('Collected individual result {}.'.format(indv.scope))
                 self.indv_to_collect.remove(indv)
 
+    def is_an_individual_finished(self, indv):
+        pass
+
+    def is_a_society_finished(self, society):
+        pass
+
     def is_finished(self):
 
         # if self.previous_generation is not None:
@@ -229,6 +282,15 @@ class Generation(object):
             return True
         else:
             return False
+
+    def __str__(self) -> str:
+
+
+
+        opt_str = ''
+        opt_str += f'Current length of indv_to_distribute is {sum(int(i.status.fininshed) for i in self.individuals)}.\n'
+        opt_str += f'Current length of indv_to_collect is {sum(len(i.status.assigned) for i in self.individuals)}.\n'
+
 
     def __call__(self, action, *args, **kwds):
 

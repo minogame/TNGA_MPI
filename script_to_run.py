@@ -5,7 +5,8 @@ from mpi4py import MPI
 from core.mpi_agent import MPI_Agent
 from core.mpi_overload import MPI_Overlord
 import logging
-logging.basicConfig(format='[%(levelname)s] +%(asctime)s+ =%(name)s= %(message)s ', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
+logging.basicConfig(format='[%(levelname)s] +%(asctime)s+ =%(name)s= %(message)s ', 
+                    datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
 
 class MPI_Process:
 

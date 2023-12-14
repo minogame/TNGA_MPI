@@ -206,6 +206,9 @@ class MPI_Overlord():
 
             return True
 
+    def generate_picklable_instance(self):
+        pass
+
     def __call__(self):
         ## when the overload is called
         ## 1. initilize 4 mpi recv comm

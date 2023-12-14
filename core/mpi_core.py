@@ -1,28 +1,43 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
+
+###################### TAG CLASSES FOR COMMUNICATION ######################
 
 class TAGS:
     __rdict__ = {}
-    DATA_ADJ_MATRIX = 0
-    DATA_GOAL = 1
-    DATA_RUN_REPORT = 2
-    DATA_MISC = 3
-    INFO_TIME_ESTIMATION = 10
-    INFO_SURVIVAL = 11
-    INFO_ABNORMAL = 12
-    INFO_MISC = 12
+    DATA_ADJ_MATRIX: Final[int] = 0
+    DATA_GOAL: Final[int] = 1
+    DATA_RUN_REPORT: Final[int] = 2
+    DATA_MISC: Final[int] = 3
+    INFO_TIME_ESTIMATION: Final[int] = 10
+    INFO_SURVIVAL: Final[int] = 11
+    INFO_ABNORMAL: Final[int] = 12
+    INFO_MISC: Final[int] = 12
 
 class SURVIVAL:
     __rdict__ = {}
-    HOST_RUNNING = 0
-    HOST_NORMAL_FINISHED = 1
-    HOST_ABNORMAL_SHUTDOWN = 2
+    HOST_RUNNING: Final[int] = 0
+    HOST_NORMAL_FINISHED: Final[int] = 1
+    HOST_ABNORMAL_SHUTDOWN: Final[int] = 2
 
 class REASONS:
     __rdict__ = {}
-    REACH_MAX_ITER = 0
-    HARD_TIMEOUT = 1
-    FAKE_RESULT = 2
+    REACH_MAX_ITER: Final[int] = 0
+    HARD_TIMEOUT: Final[int] = 1
+    FAKE_RESULT: Final[int] = 2
+
+## Generation revert dictionary for tag classes
+## such that you could reverse map the tag to its name
+def init_rdict(c):
+    for k, v in c.__dict__.items():
+        if not k.startswith('__'):
+            c.__rdict__[v] = k
+
+init_rdict(TAGS)
+init_rdict(REASONS)
+init_rdict(SURVIVAL)
+
+###################### DATACLASS FOR RECORDING MPI RUNNING STATUS ######################
 
 @dataclass
 class AGENT_STATUS:
@@ -33,33 +48,34 @@ class AGENT_STATUS:
     up_time: float = 0
     abnormal_counter: int = 0
 
-@dataclass
-class SOCIETY:
-    name: None
-    individuals: list[Any] = []
-    score_original: list[Any] = []
-    score_total: list[Any] = []
-    indv_ranking: list[Any] = []
-
-    def __iter__(self):
-        for i in self.individuals:
-            yield i.scope, i
-
-    def __len__(self):
-        return len(self.individuals)
-
+    def __str__(self) -> str:
+        if self.assigned_job:
+            t = f'Current assigned_job = {self.assigned_job}, estimation_time = {self.estimation_time}, current_iter = {self.current_iter}. \n' \
+                f'Current tik_time = {self.tik_time}, real up_time = {self.up_time}, abnormal_counter = {self.abnormal_counter}. \n'
+        else:
+            t = f'Current no job assigned. \n' \
+                f'Current tik_time = {self.tik_time}, real up_time = {self.up_time}, abnormal_counter = {self.abnormal_counter}. \n'
+        return t
+    
 @dataclass
 class INDIVIDUAL_STATUS:
-    individual: Any = None
     assigned: list[int] = []
     repeated: int = 0
+    finished: bool = False
+    minimal_estimiation_time: float = 1e9
 
     def __str__(self) -> str:
         if self.assigned:
-            t = f'Individual {self.individual.scope} has been repeated {self.repeated} times,' \
-                f'it is currently been assign in agent rank = {self.assigned}.'
+            t = f'Individual {self.individual.scope} has been repeated {self.repeated} times,\n' \
+                f'it is currently been assign in agent rank = {self.assigned}.\n'
+        else:
+            t = f'Individual {self.individual.scope} has finish with {self.repeated} repeation times.\n' \
+                'Waiting to be assigned. \n'
             
         return t
+
+
+###################### UTILS ######################
 
 class DUMMYINDV:
     pass
@@ -67,12 +83,4 @@ class DUMMYINDV:
 def DUMMYFUNC(*args, **kwds):
     pass
 
-def init_rdict(c):
-    for k, v in c.__dict__.items():
-        if not k.startswith('__'):
-            c.__rdict__[v] = k
-
-init_rdict(TAGS)
-init_rdict(REASONS)
-init_rdict(SURVIVAL)
 
