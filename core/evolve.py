@@ -1,13 +1,12 @@
 import numpy as np
 import random
-from mpi_core import DUMMYINDV
+# from mpi_core import DUMMYINDV
 
 class FITNESS_FUNCS:
 
     @staticmethod
     def defualt(s, l):
         return s + l * 50
-
 
 class EVOLVE_OPS:
 

@@ -6,7 +6,7 @@ import tensorflow as tf
 tf.compat.v1.disable_eager_execution()
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import mpi4py
-from mpi_core import TAGS, REASONS, SURVIVAL
+from mpi_core import TAGS, REASONS, SURVIVAL, load_func
 
 class MPI_Agent(object):
 
@@ -29,7 +29,7 @@ class MPI_Agent(object):
         self.start_time = time.time()
         self.logger = kwargs['logger']
         self.logger.info(f'MPI_Agent {self.rank} started.')
-        self.optimizer = kwargs['optimization']['optimizer']
+        self.optimizer = load_func(kwargs['optimization']['optimizer'])
         self.optimizer_param = kwargs['optimization']['optimizer_params']
 
     def tik(self, sec):
@@ -105,6 +105,7 @@ class MPI_Agent(object):
         with self.g.as_default():
             with tf.compat.v1.variable_scope(indv_scope):
                 TN = TensorNetwork(adj_matrix)
+                # TODO TN need a proper initialization
                 output = TN.reduction(random=False)
                 goal = tf.convert_to_tensor(self.evoluation_goal)
                 goal_square_norm = tf.convert_to_tensor(np.mean(np.square(self.evoluation_goal)))

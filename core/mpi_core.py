@@ -62,12 +62,13 @@ class INDIVIDUAL_STATUS:
     assigned: list[int] = []
     repeated: int = 0
     finished: bool = False
-    minimal_estimiation_time: float = 1e9
+    minimal_estimation_time: float = 1e9
 
     def __str__(self) -> str:
         if self.assigned:
             t = f'Individual {self.individual.scope} has been repeated {self.repeated} times,\n' \
-                f'it is currently been assign in agent rank = {self.assigned}.\n'
+                f'it is currently been assign in agent rank = {self.assigned},\n' \
+                f'Minimal estimation time for this individual is {self.minimal_estimation_time}. \n'
         else:
             t = f'Individual {self.individual.scope} has finish with {self.repeated} repeation times.\n' \
                 'Waiting to be assigned. \n'
@@ -83,4 +84,11 @@ class DUMMYINDV:
 def DUMMYFUNC(*args, **kwds):
     pass
 
+## the formal function parser for yaml that avoid eval() troubles
+from importlib import import_module
+def load_func(dotpath : str):
+    """ load function in module.  function is right-most segment """
+    module_, func = dotpath.rsplit(".", maxsplit=1)
+    m = import_module(module_)
+    return getattr(m, func)
 

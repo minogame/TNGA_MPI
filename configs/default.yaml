@@ -4,15 +4,14 @@ experiment:
     random_init: True
 
 tensor_network:
-    initializer: tf.compat.v1.random_normal_initializer
+    initializer: tensorflow.compat.v1.random_normal_initializer
     initializer_params:
         mean: 0.0
         stddev: 1.0
 
 optimization:
-    evaluate_repeat: 2
     max_iterations: 50000
-    optimizer: tf.compat.v1.train.AdamOptimizer
+    optimizer: tensorflow.compat.v1.train.AdamOptimizer
     optimizer_params:
         learning_rate: 0.001
 
@@ -28,8 +27,9 @@ generation_property:
         n_societies: 1
         n_individuals_span: 200
         n_individuals_survive: 100 
+    evaluate_repeat: 2
     still_allow_repeat_after_hard_timeout: True
-    fitness_func: [FITNESS_FUNCS.defualt]
+    fitness_func: FITNESS_FUNCS.defualt
 
 individual_property:
     discard_hard_timeout_result: False
@@ -40,6 +40,8 @@ individual_property:
         init_sparsity: -0.00001
 
 evolution_property:
+    evolution:
+        - 
     elimiation_threshold: 0.8
     immigration_prob: 0
     immigration_number: 5

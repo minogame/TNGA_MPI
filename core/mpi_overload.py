@@ -178,16 +178,6 @@ class MPI_Overlord():
             self.get_current_generation.collect_indv_report(r)
         return
 
-    def __report_generation__(self):
-        self.logger.info('Current length of indv_to_distribute is {}.'.format(len(self.current_generation.indv_to_distribute)))
-        self.logger.info('Current length of indv_to_collect is {}.'.format(len(self.current_generation.indv_to_collect)))
-        self.logger.info([(indv.scope, indv.sge_job_id) for indv in self.current_generation.indv_to_collect])
-
-
-    def __report_agents__(self):
-        self.logger.info('Current number of known agents is {}.'.format(len(self.known_agents)))
-        self.logger.info(list(self.known_agents.keys()))
-
     def span_generation(self):
         if not len(self.collection_of_generations):
             self.collection_of_generations.append(Generation(name='generation_init', **self.kwds))
@@ -226,10 +216,9 @@ class MPI_Overlord():
 
         self.sync_goal()
         while self.span_generation():
-            self.
-            self.current_generation.indv_to_distribute = []
+            cg = self.get_current_generation()
             self.call_with_interval(self.check_available_agent, 4)
-            self.call_with_interval(self.__assign_job__, 4)
+            self.call_with_interval(self.assign_job, 4)
             self.call_with_interval(self.__collect_result__, 4)
             self.call_with_interval(self.__report_agents__, 180)
             self.call_with_interval(self.__report_generation__, 160)

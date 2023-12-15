@@ -1,7 +1,7 @@
 from typing import Any, Callable
 import numpy as np
 import random, string, os
-from evolve import EVOLVE_OPS
+from evolve import EVOLVE_OPS, FITNESS_FUNCS
 from callbacks import CALLBACKS, LOG_FORMATER
 from mpi_core import REASONS, INDIVIDUAL_STATUS
 import itertools
@@ -139,13 +139,14 @@ class Individual:
 class Generation:
 
     @dataclass
-    class SOCIETY:
+    class Society:
         name: None
         individuals: list[Any] = []
         score_original: list[Any] = []
         score_total: list[Any] = []
         indv_ranking: list[Any] = []
         finished: bool = False
+        fitness_func: Callable = None
 
         def __iter__(self):
             for i in self.individuals:
@@ -155,7 +156,7 @@ class Generation:
             return len(self.individuals)
         
         def __str__(self):
-            opt_str = 'In society'
+            opt_str = f'===== SOCIETY {self.name} =====\n'
             if self.finished:
                 for idx, indv in enumerate(self.individuals):
                     if idx == self.indv_ranking[0]: ## the best individual
@@ -163,14 +164,16 @@ class Generation:
                     else:
                         opt_str += LOG_FORMATER.BLUE_F.format(content=str(indv))
             else:
-            self.logger.info('.format(len(self.current_generation.indv_to_distribute)))
-            self.logger.info(''.format(len(self.current_generation.indv_to_collect)))
-            self.logger.info([(indv.scope, indv.sge_job_id) for indv in self.current_generation.indv_to_collect])
-
+                opt_str += f'Current length of indv_to_distribute is {sum(int(i.status.fininshed) for i in self.individuals)}.\n'
+                opt_str += f'Current length of indv_to_collect is {sum(len(i.status.assigned) for i in self.individuals)}.\n'
+                opt_str += f'Current assigned job list: '
+                for i in self.individuals:
+                    opt_str += f'[{i.scope} => {i.status.assigned}] '
+                opt_str += '\n'
+            return opt_str
 
     def init_societies_individuals(self, pG=None):
         if pG:
-            self.societies = {}
             for k, v in pG.societies.items():
                 self.societies[k] = {}
                 self.societies[k]['indv'] = \
@@ -180,7 +183,6 @@ class Generation:
                 self.indv_to_distribute += [indv for indv in self.societies[k]['indv']]
 
         else:
-            self.societies = {}
             for n in range(self.kwds['N_islands']):
                 society_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5)) + f'{n}'
                 self.societies[society_name] = {}
@@ -199,9 +201,22 @@ class Generation:
 
         ## parse the kwds
         self.kwds = kwds
-        self.N_islands = kwds['N_islands'] if 'N_islands' in kwds.keys() else 1
+        self.generation_property = kwds.get('generation_property', {})
+        self.society_params = self.generation_property.get('society_params', 
+                            dict(n_societies=1, n_individuals_span=200, n_individuals_survive=100))
+        self.evaluate_repeat = self.generation_property.get('evaluate_repeat', 2)
+        self.still_allow_repeat_after_hard_timeout = self.generation_property.get('still_allow_repeat_after_hard_timeout', True)
+        fitness_func = self.generation_property.get('fitness_func', FITNESS_FUNCS.defualt)
+        if fitness_func is Callable:
+            self.
 
+        ## init societies
+        self.societies = {}
+        self.init_societies_individuals(pG=pG)
         
+        ## prepare evolve ops
+        self.evolution_property = kwds.get('evolution_property', dict(elimiation_threshold=0.8))
+
 
     def evolve(self):
         # ELIMINATION
@@ -261,12 +276,27 @@ class Generation:
                 self.logger.info('Individual {} is killed due to its sparsity = {} / {}.'.format(indv.scope, np.log10(indv.sparsity), indv.sparsity_connection))
 
     def collect_indv(self):
-        for indv in self.indv_to_collect:
-            if indv.collect():
-                self.logger.info('Collected individual result {}.'.format(indv.scope))
-                self.indv_to_collect.remove(indv)
+        ## TODO
+        # for indv in self.indv_to_collect:
+        #     if indv.collect():
+        #         self.logger.info('Collected individual result {}.'.format(indv.scope))
+        #         self.indv_to_collect.remove(indv)
+        pass
 
     def is_an_individual_finished(self, indv):
+        ## To determint whether an individual being finished is according to its generation
+        ## if generation find indv.status.repeat equals configuartion.repeat,
+        ## or this individual has hard timeout and still_allow_repeat_after_hard_timeout is False
+        ## then the individual is consider to be finished.
+        ## The generation will change the indv.status.finished to True. 
+        if indv.status.finished:
+            return True
+        else:
+            if indv.status.repeat >= 
+
+            if 
+
+            return indv.status.finished
         pass
 
     def is_a_society_finished(self, society):
@@ -284,12 +314,18 @@ class Generation:
             return False
 
     def __str__(self) -> str:
+        pass
+
+    def __report_generation__(self):
+        self.logger.info('Current length of indv_to_distribute is {}.'.format(len(self.current_generation.indv_to_distribute)))
+        self.logger.info('Current length of indv_to_collect is {}.'.format(len(self.current_generation.indv_to_collect)))
+        self.logger.info([(indv.scope, indv.sge_job_id) for indv in self.current_generation.indv_to_collect])
 
 
+    def __report_agents__(self):
+        self.logger.info('Current number of known agents is {}.'.format(len(self.known_agents)))
+        self.logger.info(list(self.known_agents.keys()))
 
-        opt_str = ''
-        opt_str += f'Current length of indv_to_distribute is {sum(int(i.status.fininshed) for i in self.individuals)}.\n'
-        opt_str += f'Current length of indv_to_collect is {sum(len(i.status.assigned) for i in self.individuals)}.\n'
 
 
     def __call__(self, action, *args, **kwds):
@@ -302,9 +338,6 @@ class Generation:
 
         try:
             self.evaluate()
-            if 'callbacks' in kwds.keys():
-                for c in kwds['callbacks']:
-                    c(self)
             self.evolve()
             return True
         except Exception as e:
