@@ -11,6 +11,14 @@ class FITNESS_FUNCS:
 class EVOLVE_OPS:
 
     @staticmethod
+    def fillup(generation, adj_func):
+        self.societies[society_name]['indv'] = [ \
+                        Individual(scope='{}/{}/{:03d}'.format(self.name, society_name, i), 
+                        adj_func=Individual.naive_random_adj_matrix_with_sparsity_limitation) \
+                        for i in range(self.kwds['population'][n]) ]
+
+
+    @staticmethod
     def mutation(indv, prob, generation):
         dim = indv.adj_matrix.shape[0]
         elements = np.stack(np.triu_indices(dim, 1)).transpose()
@@ -21,20 +29,20 @@ class EVOLVE_OPS:
             indv.adj_matrix[np.tril_indices(dim, -1)] = indv.adj_matrix.transpose()[np.tril_indices(dim, -1)]
 
     @staticmethod
-    def immigration(islands, number=5):
-        island_A, island_B = islands
+    def immigration(societies, number=5):
+        society_A, society_B = societies
         for _ in range(number):
-            island_B.append(island_A.pop(0))
-            island_A.append(island_B.pop(0))
+            society_B.append(society_A.pop(0))
+            society_A.append(society_B.pop(0))
 
     @staticmethod
-    def elimination(island, threshold=80):
-        island['rank'] = island['rank'][:threshold]
-        island['indv'] = [island['indv'][i] for i in island['rank']]
-        island['total'] = [island['total'][i] for i in island['rank']]
+    def elimination(society, threshold=80):
+        society['rank'] = society['rank'][:threshold]
+        society['indv'] = [society['indv'][i] for i in society['rank']]
+        society['total'] = [society['total'][i] for i in society['rank']]
 
     @staticmethod
-    def crossover(island, population, alpha=5):
+    def crossover(society, population, alpha=5):
         __adj_matrix__, __parents__ = [], []
         def propagation(couple, percent=0.5):
             adj_matrix_male = np.copy(couple[0].adj_matrix)
@@ -55,7 +63,7 @@ class EVOLVE_OPS:
             __parents__.append((couple[0].scope[-13:], couple[1].scope[-13:]))
             __parents__.append((couple[0].scope[-13:], couple[1].scope[-13:]))
 
-        indv, fitness = island['indv'], island['total']
+        indv, fitness = society['indv'], society['total']
         rank = np.argsort(fitness)
         # prob = [ 1.0/(1e-5+f)*alpha for f in fitness]        
         # p = [ np.exp(3/(1+k)) for k in range(len(indv)) ]

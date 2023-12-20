@@ -202,16 +202,32 @@ class Generation:
         ## parse the kwds
         self.kwds = kwds
         self.generation_property = kwds.get('generation_property', {})
-        self.society_params = self.generation_property.get('society_params', 
-                            dict(n_societies=1, n_individuals_span=200, n_individuals_survive=100))
         self.evaluate_repeat = self.generation_property.get('evaluate_repeat', 2)
         self.still_allow_repeat_after_hard_timeout = self.generation_property.get('still_allow_repeat_after_hard_timeout', True)
-        fitness_func = self.generation_property.get('fitness_func', FITNESS_FUNCS.defualt)
-        if fitness_func is Callable:
-            self.
 
-        ## init societies
+
+        ## parse and init societies
+        self.society_property = self.generation_property.get('society_property', {})
+        self.n_societies = self.generation_property.get('n_societies', 1)
+        self.society_params_list = self.society_property.get('society', [dict(n_individuals_span=200, n_individuals_survive=100, fitness_func=FITNESS_FUNCS.defualt)])
+        if len(self.society_params_list) == 1 and self.n_societies > 1:
+            self.society_params_list = self.society_params_list * self.n_societies
+        elif len(self.society_params_list) != self.n_societies:
+            raise ValueError('Cannot parse society_params due to number balance between n_societies and society_params.')
+
         self.societies = {}
+        for param in self.society_params_list:
+            fitness_func = param.get('fitness_func', FITNESS_FUNCS.defualt)
+            if fitness_func is not Callable:
+                self.
+
+            # n_individuals_span: 200
+            # n_individuals_survive: 100 
+            # evolution:
+            #     - ops: elimation
+            #     - ops: mutation
+        
+        
         self.init_societies_individuals(pG=pG)
         
         ## prepare evolve ops
